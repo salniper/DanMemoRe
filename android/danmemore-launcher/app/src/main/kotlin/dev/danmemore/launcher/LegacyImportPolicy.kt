@@ -7,7 +7,7 @@ package dev.danmemore.launcher
 internal object LegacyImportPolicy {
     enum class Match { REFERENCE, HISTORICAL, UNKNOWN }
 
-    private val allowedPhase1Missing = setOf(
+    internal val allowedPhase1Missing = setOf(
         "files/lwf/uiLwf/home/lwf_title_effect/lwf_title_effect_1.lwf",
         "files/lwf/uiLwf/home/lwf_title_effect/lwf_title_effect_1.png",
         "files/lwf/uiLwf/home/lwf_title_logo/lwf_title_logo.lwf",
