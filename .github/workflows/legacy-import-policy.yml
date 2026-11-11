@@ -1,14 +1,6 @@
 name: Legacy Import policy
 
 on:
-  push:
-    branches:
-      - feature/legacy-import-guarded
-    paths:
-      - ".github/workflows/legacy-import-policy.yml"
-      - "tools/legacy-policy-ci/**"
-      - "tools/test_legacy_import_policy.kt"
-      - "android/danmemore-launcher/app/src/main/kotlin/dev/danmemore/launcher/LegacyImportPolicy.kt"
   pull_request:
     paths:
       - ".github/workflows/legacy-import-policy.yml"
