@@ -12,6 +12,8 @@ on:
       - "tools/test_inspect_legacy_mismatches.py"
       - "tools/repair_verified_phase_manifests.py"
       - "tools/test_repair_verified_phase_manifests.py"
+      - "tools/prepare_legacy_recovery_overlay.py"
+      - "tools/test_prepare_legacy_recovery_overlay.py"
       - "tools/inspect_master_source_provenance.py"
       - "tools/test_inspect_master_source_provenance.py"
       - "android/danmemore-launcher/app/src/main/kotlin/dev/danmemore/launcher/LegacyImportPolicy.kt"
@@ -47,6 +49,7 @@ jobs:
           python3 -m unittest discover -s tools -p 'test_recover_legacy_apk_assets.py' -v
           python3 -m unittest discover -s tools -p 'test_inspect_legacy_mismatches.py' -v
           python3 -m unittest discover -s tools -p 'test_repair_verified_phase_manifests.py' -v
+          python3 -m unittest discover -s tools -p 'test_prepare_legacy_recovery_overlay.py' -v
 
   master-provenance:
     runs-on: ubuntu-24.04
