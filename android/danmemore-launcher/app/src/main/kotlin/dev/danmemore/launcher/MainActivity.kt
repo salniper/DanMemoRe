@@ -122,19 +122,21 @@ class MainActivity : ComponentActivity() {
             "rename" -> if (idle) { manager.rename(selected, value); refreshProfiles(); message = "Save renamed" }
             "reset" -> if (idle) { manager.reset(selected); refreshProfiles(); message = "Save reset; it will be rebuilt from the preserved seed" }
             "refresh" -> { refreshProfiles(); message = if (running) "SQLite listener ready" else "Profiles refreshed" }
-            "import-content" -> if (idle) importContent(Uri.parse(value))
+            "import-content" -> if (idle) importContent(Uri.parse(value), legacyMode = false)
+            "import-legacy-content" -> if (idle) importContent(Uri.parse(value), legacyMode = true)
             "iris-free" -> if (running && !busy) addOfflineIris("free")
             "iris-paid" -> if (running && !busy) addOfflineIris("paid")
         }
     }
 
-    private fun importContent(uri: Uri) {
+    private fun importContent(uri: Uri, legacyMode: Boolean) {
         val permission = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION
         runCatching { contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
             .onFailure { message = "The selected ZIP did not grant lasting read access"; return }
         busy = true; message = "ZIP import queued; keep the emulator powered on"
         startForegroundService(Intent(this, ContentImportService::class.java)
             .setAction(ContentImportService.ACTION_IMPORT)
+            .putExtra(ContentImportService.EXTRA_LEGACY_MODE, legacyMode)
             .setData(uri)
             .addFlags(permission))
     }
@@ -195,9 +197,12 @@ private val Navy = Color(0xff0d151e)
 @Composable private fun Launcher(running: Boolean, busy: Boolean, message: String, profiles: List<Profile>, selected: String,
                                  action: (String, String) -> Unit) {
     var tab by remember { mutableStateOf(Tab.Home) }; var rename by remember { mutableStateOf(false) }; var reset by remember { mutableStateOf(false) }
-    var historical by remember { mutableStateOf(false) }; var changeClock by remember { mutableStateOf(false) }; var importContent by remember { mutableStateOf(false) }
+    var historical by remember { mutableStateOf(false) }; var changeClock by remember { mutableStateOf(false) }; var importContent by remember { mutableStateOf(false) }; var importLegacy by remember { mutableStateOf(false) }
     val contentPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) action("import-content", uri.toString())
+    }
+    val legacyPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) action("import-legacy-content", uri.toString())
     }
     val selectedProfile = profiles.firstOrNull { it.id == selected }
     val idle = !running && !busy
@@ -265,6 +270,7 @@ private val Navy = Color(0xff0d151e)
                         Heading("Tools & connection", "Local-first. Your saves stay yours.")
                         ActionRow("Refresh profiles", "Reload SQLite profile state", true) { action("refresh", "") }
                         ActionRow("Import preserved contents ZIP", "Rootless · verified in private launcher storage", idle) { importContent = true }
+                        ActionRow("Legacy Import (2024 snapshot)", "Experimental · pinned manifests and per-file MD5", idle) { importLegacy = true }
                         ActionRow("Add 1,000 free Iris", "Offline local-save grant · no store transaction", running && !busy) { action("iris-free", "") }
                         ActionRow("Add 1,000 paid Iris", "Funds archived paid-Iris shop packs locally", running && !busy) { action("iris-paid", "") }
                         Section("Save protection") { Text("Gameplay deltas, request ordering, operation acknowledgements, and exact retries are committed in SQLite transactions."); Text("Stop the listener before switching, renaming, or resetting a save.", color = Gold) }
@@ -285,6 +291,14 @@ private val Navy = Color(0xff0d151e)
             text = { Text("This deletes the selected local SQLite profile and rebuilds it from the preserved seed on next launch.") },
             confirmButton = { TextButton(onClick = { reset = false; action("reset", "") }) { Text("Reset") } },
             dismissButton = { TextButton(onClick = { reset = false }) { Text("Cancel") } })
+        if (importLegacy) AlertDialog(onDismissRequest = { importLegacy = false },
+            title = { Text("Import historical content snapshot?") },
+            text = { Text("Experimental. Only a pinned preservation snapshot can be imported. Every known asset must match the current or historical MD5; unknown changes are rejected. Up to 33 known UI/audio files may still be missing. This does not guarantee that the game will start. Keep your original saves and backup.") },
+            confirmButton = { TextButton(onClick = {
+                importLegacy = false
+                legacyPicker.launch(arrayOf("application/zip", "application/x-zip-compressed", "application/octet-stream"))
+            }) { Text("Choose legacy ZIP") } },
+            dismissButton = { TextButton(onClick = { importLegacy = false }) { Text("Cancel") } })
         if (importContent) AlertDialog(onDismissRequest = { importContent = false }, title = { Text("Import preserved assets?") },
             text = { Text("Select the preserved 15.1.0 content ZIP. DanMemoRe will verify the exact payload checksum, extract it into a private staging cache, verify every extracted file, apply the offline content overlays, and activate it only when all eight phases are complete. The game downloads from that localhost cache itself; no root access is needed and saves are left untouched.") },
             confirmButton = { TextButton(onClick = { importContent = false; contentPicker.launch(arrayOf("application/zip", "application/x-zip-compressed", "application/octet-stream")) }) { Text("Choose ZIP") } },
