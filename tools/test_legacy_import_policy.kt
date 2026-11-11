@@ -44,5 +44,18 @@ fun main() {
     check(!LegacyImportPolicy.permitsMissing(3, "files/ui/title/bg_1.jpg", true, gacha))
     check(!LegacyImportPolicy.permitsMissing(4, "files/lottery/background/$gachaName", false, gacha))
 
-    println("LegacyImportPolicy: 15 assertions passed")
+    check(LegacyImportPolicy.allowedPhase1Missing.size == 33)
+    check(LegacyImportPolicy.allowedPhase1Missing.all {
+        it.isNotBlank() && !it.startsWith("/") && it.split('/').none { token ->
+            token.isBlank() || token == "." || token == ".."
+        }
+    })
+    check(LegacyImportPolicy.permitsMissing(
+        1, "files/sound/bgm/bgm_main_theme.ogg", true, emptySet()
+    ))
+    check(!LegacyImportPolicy.permitsMissing(
+        1, "files/sound/bgm/bgm_other_theme.ogg", true, emptySet()
+    ))
+
+    println("LegacyImportPolicy: 19 assertions passed")
 }
