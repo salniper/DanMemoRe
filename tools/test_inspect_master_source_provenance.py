@@ -51,6 +51,32 @@ class ProvenanceTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "not an object"):
             check.report(self.p, ["lotteryWeightGroup"])
 
+    def test_exact_sha_match_gates(self):
+        export = check.report(self.p, ["lotteryWeightGroup"])
+        proof = check.require_matches(export, {"lotteryWeightGroup": "a" * 64})
+        self.assertEqual(proof["source_byte_match_count"], 1)
+        self.assertEqual(proof["verified_source_names"], ["lotteryWeightGroup"])
+
+    def test_wrong_expected_sha_rejected(self):
+        export = check.report(self.p, ["lotteryWeightGroup"])
+        with self.assertRaisesRegex(ValueError, "source SHA-256 mismatch"):
+            check.require_matches(export, {"lotteryWeightGroup": "b" * 64})
+
+    def test_missing_required_source_rejected(self):
+        export = check.report(self.p, ["lotteryWeightGroup", "subscription"])
+        with self.assertRaisesRegex(ValueError, "required source absent"):
+            check.require_matches(export, {"subscription": "a" * 64})
+
+    def test_unrecognized_name_rejected(self):
+        export = check.report(self.p, ["lotteryWeightGroup"])
+        with self.assertRaisesRegex(ValueError, "unsupported required source"):
+            check.require_matches(export, {"pathTraversal": "a" * 64})
+
+    def test_malformed_expected_hash_rejected(self):
+        export = check.report(self.p, ["lotteryWeightGroup"])
+        with self.assertRaisesRegex(ValueError, "invalid expected SHA"):
+            check.require_matches(export, {"lotteryWeightGroup": "malformed"})
+
     def test_incomplete_sources_fails(self):
         self.p.write_text('{"sources":{"not-closed":')
         with self.assertRaisesRegex(ValueError, "incomplete or malformed"):
