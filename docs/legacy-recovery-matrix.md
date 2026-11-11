@@ -213,6 +213,63 @@ Next: obtain *actual bytes* of only the seven small phase manifests
 12 files separately against independent authoritative sources. Avoid
 sharing the whole 12+ GB game backup unnecessarily.
 
+## Actual 19-file byte analysis and verified repair (2026-11-11)
+
+Source: user-supplied `danmemore_19_payload.json`, decoded and independently
+compared against the earlier `danmemore_legacy_audit.json`. **No game bytes
+or Base64 payload are stored in Git.** All 19 decoded source MD5s matched
+their previous audited MD5s and sizes.
+
+### Two source-verified phase manifests can be restored exactly
+
+The files `1/manifests/phase.manifest.6` (354 bytes) and
+`1/manifests/phase.manifest.7` (355 bytes) contain three occurrences each
+of the 32-character version token
+`582a6b5539f7766be40c5d2e36aca01b`. Replacing **all three**
+occurrences with `4ab12a6c3f219553661ff647ae79e322` preserves file
+length and produces the **exact MD5 pinned independently by both reference
+and historical project catalogs**.
+
+| File | Audited original MD5 | Verified repaired MD5 |
+| --- | --- | --- |
+| `phase.manifest.6` | `cf9bf8714842d2cd11b14291b5b34ce4` | `978673603b2d29df0ef9b53447ba0bcd` |
+| `phase.manifest.7` | `deb4b0c78a04b83afce86b73d94909a0` | `3bc336eab43c1c16350aab4a9a0ee5f4` |
+
+Both repairs were **actually reproduced from the uploaded source bytes**
+with the expected MD5, not merely inferred. The two repaired SHA-256
+digests are also pinned in
+`tools/repair_verified_phase_manifests.py`, which checks the original
+SHA-256 and writes repaired files to a **separate output folder** only on
+explicit `--apply` (dry run by default). It refuses to overwrite files or
+write inside the source `contents` directory.
+
+The **five other** differing phase manifests have matching JSON keys but
+**did not** match their expected MD5 when the same three-token replacement
+was attempted. An additional one- or two-digit modification to the
+`size` field also failed to produce their expected MD5 in a bounded
+candidate check. Do not infer their original contents from the two
+successful examples.
+
+### Remaining 12 bytesets are not independently authenticated
+
+- Ten `.enc` assets have 16-byte-aligned lengths, no duplicate 16-byte
+  blocks within each file, and byte entropies around 7.55–7.99 bits/byte
+  (the smallest 480-byte sample has the lowest entropy). These features
+  are **consistent with** opaque ciphertext, but reveal no authenticated
+  plaintext, key, or root cause of the mismatch. Do not rewrite or bypass.
+- `number.png` is an independently decodable 109 × 179 PNG (LA mode,
+  valid chunk CRC), with EXIF and text metadata including creation
+  timestamps from 2023-04-17. Validity does not prove pixel identity with
+  the trusted original image, and no reference pixel hash is available.
+- `gacha_top_move_parts_text.json` is parseable JSON with a `root`
+  object and CRLF line endings. No authenticated original JSON bytes are
+  available for comparison; JSON validity does not prove equivalence.
+
+**Updated status: 2/19 mismatches have a proven byte-exact repair,
+17/19 remain unresolved.** The preserved source still does **not** pass
+strict Legacy Import until the other 17 are resolved; do not merge or
+activate based on this partial recovery.
+
 ## Recovery sequence
 
 1. **Search for authentic EU-version assets first** from a legitimately
