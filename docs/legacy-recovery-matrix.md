@@ -132,6 +132,54 @@ Nine synthetic negative/positive Python regression tests run in the
 for exact SHA/MD5 recovery. Do not patch original data or bypass the 19
 file-level checks on the strength of metadata alone.
 
+## Cross-check of the user's on-device triage (2026-11-11)
+
+The AYN Thor produced a full 19-item `ON_DEVICE_REHASH` report:
+every item had `audit_recheck=MATCH` against the prior local audit.
+The result means unchanged **unverified** bytes, not a match to the
+official reference or historically pinned manifest.
+
+Structural read-only checks on the device reported:
+- 7/7 phase manifests parse as JSON objects;
+- `1/files/font/number.png` has valid PNG chunk CRCs;
+- `3/files/ui_atlas/home_gacha/gacha_top_move_parts_text.json`
+  parses as JSON;
+- all ten opaque `.enc` files have lengths divisible by 16 bytes,
+  which does not authenticate their encryption or plaintext.
+
+### Public loose-file mirror comparison
+
+A [public asset folder](https://drive.google.com/drive/folders/1xqzfdevOO7ph1ppck9t8TiwzJVXpr4Yb)
+contains the same EU backup assets as separate files. Independently
+fetched **13 of the 19** mismatches and recomputed their MD5 and SHA-256.
+All thirteen matched the user's reported on-device fingerprints exactly:
+
+| Compared category | Identical bytes | Additional observation |
+| --- | ---: | --- |
+| `1/manifests/phase.manifest.{1,2,3,4,6,7,8}` | 7/7 | Valid JSON, empty `assets`; `version` is `582a6b5539f7766be40c5d2e36aca01b phased` |
+| `1/master/divide_enc/{adventureMission,downloadVoicePhase,lotteryWeightGroup,subscription}.enc` | 4/4 | 16-byte-aligned opaque data; high byte entropy is consistent with ciphertext, not proof of correctness |
+| `1/files/font/number.png` | 1/1 | 109×179 PNG |
+| `3/files/ui_atlas/home_gacha/gacha_top_move_parts_text.json` | 1/1 | Valid JSON with a `root` object |
+| Six `novelCommand*.enc` files | **not independently fetched** | Their AYN Thor rehash checks all match the original audit |
+
+The same folder's `phase.manifest.5`, which is not among the 19
+mismatches, instead reports `4ab12a6c3f219553661ff647ae79e322 phased`.
+This points toward a mixed or phased version state in the preserved
+dataset; it does **not** establish that the seven mismatches are safe to
+accept. Their reference MD5 checks still fail.
+
+**Important provenance limitation:** The public loose-file folder and the
+user's six-part RAR dump appear to be mirrors of one preservation
+collection (the APK and Directory.txt are also the same). Thus the
+matching hashes corroborate stability, but do **not** constitute a
+second independently captured build. None of these 13 mismatches is
+promoted to verified status, and all original import guards remain in place.
+
+Next evidence needed: a truly independent EU-version game cache,
+or a reproducible decryption/semantic comparison from original client
+logic. Filename or 16-byte alignment alone is not an acceptance
+criterion. Continue with read-only checks; never rewrite the originals.
+
 ## Recovery sequence
 
 1. **Search for authentic EU-version assets first** from a legitimately
