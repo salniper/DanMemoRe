@@ -96,6 +96,33 @@ Android build still requires an externally supplied Node Mobile distribution:
 Node Mobile releases are ABI-compatible with the bundled JNI bridge;
 verify the required Node/V8 symbols and Android 16 KB page alignment.
 
+## Experimental Android build (not a release)
+
+An isolated CI job now attempts a **real Android ARM64 debug compilation**:
+
+- Workflow: `.github/workflows/legacy-android-build.yml`.
+- Android SDK 36, NDK 27.2.12479018, CMake 3.22.1, JDK 17.
+- Gradle 8.14.3 and Kotlin Android plugin 2.3.0.
+- Node Mobile **24.22.1-0 full** from
+  `fogtape/nodejs-mobile` release `v24.22.1-0`, with the release
+  archive SHA-256 pinned to
+  `d6fd9f610fe5d81fede8f0d400c5a62723247725a19831835f15abf4f0604250`.
+- `CMAKE_CXX_STANDARD=20`, required by the selected V8 headers.
+- The debug APK gets a **different application ID**,
+  `dev.danmemore.launcher.legacytest`; the original package remains
+  `dev.danmemore.launcher`. Their signature-level internal broadcast
+  permissions are also isolated by application ID.
+- A successful build artifact is only an experimental debug binary. It is
+  not a validated or playable release and must not replace the user's
+  original Launcher. The two apps share localhost port 28766, so they
+  must not run simultaneously.
+- CI debug signing is not a stable update identity. Never put valuable
+  saves into the experimental package.
+
+The full Node Mobile 24 library is used because its lite variant omits
+features including SQLite/Web Storage; native-bridge ABI and runtime
+compatibility remain subject to build and device acceptance.
+
 ## Acceptance before changing from draft PR
 
 - [ ] Android build with Java 17, Android SDK 36, NDK 27.2.12479018,
