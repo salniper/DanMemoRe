@@ -72,6 +72,27 @@ class VerifiedPhaseRepairTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "requires --output-dir"):
             fix.run(self.source, None, True)
 
+    def test_size_field_correction_is_byte_exact(self):
+        spec = dict(fix.REPAIRS[self.filename])
+        spec["old_size_field"] = 999111222
+        spec["new_size_field"] = 999333444
+        original = self.original.replace(b'"version": "', b'"size": 999111222, "version": "')
+        repaired = original.replace(
+            fix.SOURCE_VERSION, fix.REFERENCE_VERSION
+        ).replace(b'"size": 999111222', b'"size": 999333444')
+        spec["size"] = len(original)
+        spec["source_sha256"] = hashlib.sha256(original).hexdigest()
+        spec["repaired_sha256"] = hashlib.sha256(repaired).hexdigest()
+        spec["reference_md5"] = hashlib.md5(repaired).hexdigest()
+        self.assertEqual(fix.verified_repair(self.filename, original, spec), repaired)
+
+    def test_size_field_mismatch_fails_closed(self):
+        spec = dict(fix.REPAIRS[self.filename])
+        spec["old_size_field"] = 999111222
+        spec["new_size_field"] = 999333444
+        with self.assertRaisesRegex(ValueError, "unexpected source size field"):
+            fix.verified_repair(self.filename, self.original, spec)
+
     def test_source_has_exactly_three_version_occurrences(self):
         changed = self.original.replace(fix.SOURCE_VERSION, fix.REFERENCE_VERSION, 1)
         spec = {
