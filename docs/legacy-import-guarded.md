@@ -67,6 +67,35 @@ Compare candidate hashes before restoring any game file; never copy blindly.
 - No automatic mutation of the AYN Thor's extracted backup.
 - No changes to the original import UI text or original ZIP validation.
 
+## Source-level regression test (2026-11-11)
+
+The source-only importer now delegates fingerprint classification and
+missing-path policy to `LegacyImportPolicy.kt`, which has no Android runtime
+dependency. The companion `tools/test_legacy_import_policy.kt` covers:
+
+- Exact expected bytes, approved historic bytes, unknown bytes and wrong sizes.
+- Unknown or non-historic Phase 1 missing paths.
+- The 33-entry allowlist cardinality and path safety.
+- An approved title background and BGM, while unrelated BGM is rejected.
+- Phase 3 missing gacha images only when a bundled filename is present.
+- No missing-asset exceptions for Phases 2 and 4.
+
+A local Kotlin 1.9 JVM compiler run of an equivalent pure-policy copy passed 19
+assertions; this is **not an Android build, emulator pass, or a CI run of the
+repository**. Re-run the checked-in test from the repository checkout with:
+
+```bash
+kotlinc android/danmemore-launcher/app/src/main/kotlin/dev/danmemore/launcher/LegacyImportPolicy.kt \
+  tools/test_legacy_import_policy.kt -include-runtime -d /tmp/danmemore-legacy-policy-test.jar
+java -jar /tmp/danmemore-legacy-policy-test.jar
+```
+
+Android build still requires an externally supplied Node Mobile distribution:
+`DANMEMORE_LIBNODE_DIR/bin/arm64-v8a/libnode.so` and compatible
+`DANMEMORE_LIBNODE_DIR/include/node` headers. Do not assume arbitrary
+Node Mobile releases are ABI-compatible with the bundled JNI bridge;
+verify the required Node/V8 symbols and Android 16 KB page alignment.
+
 ## Acceptance before changing from draft PR
 
 - [ ] Android build with Java 17, Android SDK 36, NDK 27.2.12479018,
