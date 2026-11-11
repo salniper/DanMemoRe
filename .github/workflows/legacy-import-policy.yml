@@ -10,6 +10,8 @@ on:
       - "tools/test_recover_legacy_apk_assets.py"
       - "tools/inspect_legacy_mismatches.py"
       - "tools/test_inspect_legacy_mismatches.py"
+      - "tools/repair_verified_phase_manifests.py"
+      - "tools/test_repair_verified_phase_manifests.py"
       - "android/danmemore-launcher/app/src/main/kotlin/dev/danmemore/launcher/LegacyImportPolicy.kt"
 
 permissions:
@@ -42,3 +44,4 @@ jobs:
         run: |
           python3 -m unittest discover -s tools -p 'test_recover_legacy_apk_assets.py' -v
           python3 -m unittest discover -s tools -p 'test_inspect_legacy_mismatches.py' -v
+          python3 -m unittest discover -s tools -p 'test_repair_verified_phase_manifests.py' -v
