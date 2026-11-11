@@ -310,6 +310,13 @@ GitHub Actions check:
 The check parses only the compact source-fingerprint JSON prefix;
 it does not publish game data or decryption keys.
 
+The CI job additionally enforces exact, **fail-closed** SHA-256 matches
+for `lotteryWeightGroup` and `subscription` against the independently
+rehashed source SHA-256 fingerprints from the supplied AYN Thor audit. A missing export entry or a
+changed source SHA must fail the job; six synthetic tests also exercise
+invalid metadata and five new positive/negative expected-hash checks.
+This is a provenance regression guard, **not a change in import policy**.
+
 | File | Uploaded AYN Thor SHA-256 vs upstream source | Exported rows |
 | --- | --- | ---: |
 | `lotteryWeightGroup.enc` | **exact match:** `0217c8b751ec3baa5a33089a8db1c5b6123bd9301962fa806f450f14d88cbd2a` | 90 |
