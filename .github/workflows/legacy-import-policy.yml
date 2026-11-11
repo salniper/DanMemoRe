@@ -56,4 +56,8 @@ jobs:
       - name: Verify source metadata parser with synthetic fixtures
         run: python3 -m unittest discover -s tools -p 'test_inspect_master_source_provenance.py' -v
       - name: Compare recorded EU master source fingerprints
-        run: python3 tools/inspect_master_source_provenance.py --master data/danmemore-master.json
+        run: |
+          python3 tools/inspect_master_source_provenance.py \
+            --master data/danmemore-master.json \
+            --require-source-sha lotteryWeightGroup=0217c8b751ec3baa5a33089a8db1c5b6123bd9301962fa806f450f14d88cbd2a \
+            --require-source-sha subscription=45e0a9c947fe45e8b9b4122e0e5f88d46cc5ef58e44e559d8fc082870d64e1fb
