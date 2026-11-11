@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Recover only TWO independently byte-verified phase manifests into a separate directory.
+"""Recover three independently byte-verified phase manifests into a separate directory.
 
 No proprietary game bytes are bundled. By default this is READ-ONLY. Never
-modifies the user's source contents, and never bypasses the 17 other mismatches.
+modifies the user's source contents, and never bypasses the 16 other mismatches.
 """
 import argparse
 import hashlib
@@ -14,6 +14,14 @@ REFERENCE_VERSION = b"4ab12a6c3f219553661ff647ae79e322"
 # Actual source hashes from AYN Thor's uploaded files; targets independently
 # pinned by the reference and historical project.manifest.1 indexes.
 REPAIRS = {
+    "1/manifests/phase.manifest.3": {
+        "size": 356,
+        "source_sha256": "9d65e13a20012f36e0d7597456e3d977659400ba7f45c2ac90fcd9ad02e9cda2",
+        "repaired_sha256": "5eac0e62ba84234a421e06ce6acd2f1e07bdfe3aaf2cb25880be5d8bca242a09",
+        "reference_md5": "a7aeb999419e537e585f08eaaddb2128",
+        "old_size_field": 2911947083,
+        "new_size_field": 2912187403,
+    },
     "1/manifests/phase.manifest.6": {
         "size": 354,
         "source_sha256": "a456eac9be274d4f9e3748feeeea0c5e3101e0b0e95d4ab5b8d81bdec0733412",
@@ -45,6 +53,16 @@ def verified_repair(name: str, data: bytes, spec: dict) -> bytes:
     if not isinstance(parsed, dict) or parsed.get("assets") != {}:
         raise ValueError(f"unexpected phase manifest contents: {name}")
     fixed = data.replace(SOURCE_VERSION, REFERENCE_VERSION)
+    if "old_size_field" in spec:
+        old_size = spec["old_size_field"]
+        new_size = spec["new_size_field"]
+        if parsed.get("size") != old_size:
+            raise ValueError(f"unexpected source size field: {name}")
+        old = ('"size": ' + str(old_size)).encode("ascii")
+        new = ('"size": ' + str(new_size)).encode("ascii")
+        if len(old) != len(new) or fixed.count(old) != 1:
+            raise ValueError(f"unsafe size field replacement: {name}")
+        fixed = fixed.replace(old, new)
     if len(fixed) != len(data):
         raise ValueError(f"version replacement changed file size: {name}")
     if (hexdigest(fixed, "sha256") != spec["repaired_sha256"]
@@ -94,7 +112,7 @@ def main():
     names = run(args.contents, args.output_dir, args.apply)
     print(f"Verified {len(names)} phase manifests against reference SHA-256 and MD5.")
     print("Created separate output copies." if args.apply else "DRY RUN; no files changed.")
-    print("17 OTHER ASSETS STILL UNVERIFIED. Do not import these as a complete fix.")
+    print("16 OTHER ASSETS STILL UNVERIFIED. Do not import these as a complete fix.")
 
 
 if __name__ == "__main__":
