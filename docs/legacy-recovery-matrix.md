@@ -220,7 +220,7 @@ compared against the earlier `danmemore_legacy_audit.json`. **No game bytes
 or Base64 payload are stored in Git.** All 19 decoded source MD5s matched
 their previous audited MD5s and sizes.
 
-### Two source-verified phase manifests can be restored exactly
+### Three source-verified phase manifests can be restored exactly
 
 The files `1/manifests/phase.manifest.6` (354 bytes) and
 `1/manifests/phase.manifest.7` (355 bytes) contain three occurrences each
@@ -230,25 +230,33 @@ occurrences with `4ab12a6c3f219553661ff647ae79e322` preserves file
 length and produces the **exact MD5 pinned independently by both reference
 and historical project catalogs**.
 
+A third file, `phase.manifest.3` (356 bytes), also requires correcting
+its numeric `size` field from `2911947083` to `2912187403`
+(**+240,320**). This was found by comparing actual source bytes against
+the independently pinned expected MD5, then fully reverified.
+
 | File | Audited original MD5 | Verified repaired MD5 |
 | --- | --- | --- |
-| `phase.manifest.6` | `cf9bf8714842d2cd11b14291b5b34ce4` | `978673603b2d29df0ef9b53447ba0bcd` |
+| `phase.manifest.3` | `9c8a8af335450ae14b0801cd6db867af` | `a7aeb999419e537e585f08eaaddb2128` |
+| `phase.manifest.6` | `cf8ddbb794e32996e5445473a65601e0` | `978673603b2d29df0ef9b53447ba0bcd` |
 | `phase.manifest.7` | `deb4b0c78a04b83afce86b73d94909a0` | `3bc336eab43c1c16350aab4a9a0ee5f4` |
 
-Both repairs were **actually reproduced from the uploaded source bytes**
-with the expected MD5, not merely inferred. The two repaired SHA-256
+All three repairs were **actually reproduced from the uploaded source bytes**
+with the expected MD5, not merely inferred. All three repaired SHA-256
 digests are also pinned in
 `tools/repair_verified_phase_manifests.py`, which checks the original
 SHA-256 and writes repaired files to a **separate output folder** only on
 explicit `--apply` (dry run by default). It refuses to overwrite files or
 write inside the source `contents` directory.
 
-The **five other** differing phase manifests have matching JSON keys but
-**did not** match their expected MD5 when the same three-token replacement
-was attempted. An additional one- or two-digit modification to the
-`size` field also failed to produce their expected MD5 in a bounded
-candidate check. Do not infer their original contents from the two
-successful examples.
+The **four other** differing phase manifests (`.1`, `.2`, `.4`, `.8`)
+have matching JSON keys but did **not** match their expected MD5 under the
+same version token replacement. A bounded search modifying only their
+numeric `size` field also failed: within ±1,000,000 of source sizes for
+all four, and within ±10,000,000 for `.4` and `.8` (±20,000,000 for `.2`).
+This does **not** establish that their intended content is different in
+other fields; it only limits this particular recovery hypothesis. Do not
+infer those four target byte strings from the three successful examples.
 
 ### Remaining 12 bytesets are not independently authenticated
 
@@ -265,10 +273,28 @@ successful examples.
   object and CRLF line endings. No authenticated original JSON bytes are
   available for comparison; JSON validity does not prove equivalence.
 
-**Updated status: 2/19 mismatches have a proven byte-exact repair,
-17/19 remain unresolved.** The preserved source still does **not** pass
+**Updated status: 3/19 mismatches have a proven byte-exact repair,
+16/19 remain unresolved.** The preserved source still does **not** pass
 strict Legacy Import until the other 17 are resolved; do not merge or
 activate based on this partial recovery.
+
+
+
+### Original EU APK's `divide_bundled_enc` is not a replacement cache
+
+Independently inspected the original 2023-12-22 EU APK. Under
+`assets/common/master/divide_bundled_enc/` it contains 431 `.enc`
+entries: 413 are 32 bytes long, and 404 have **identical 32-byte contents**
+(MD5 `41513d9806ee3f9f2425765856a2a8e1`).
+The four named bundled files `adventureMission`,
+`downloadVoicePhase`, `lotteryWeightGroup`, and `subscription`
+are all among these 404 identical 32-byte files.
+
+The four *actual* legacy `divide_enc` sources are instead 480–8,272
+bytes each. Their source bytes are not recovered by taking the same-named
+APK bundled entries. This is consistent with APK-resident default/stub
+data, but the exact client-side fallback semantics have not been proven.
+None of these four pass the reference MD5 and none may be substituted.
 
 ## Recovery sequence
 
