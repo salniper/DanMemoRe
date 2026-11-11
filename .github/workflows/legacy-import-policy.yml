@@ -12,6 +12,8 @@ on:
       - "tools/test_inspect_legacy_mismatches.py"
       - "tools/repair_verified_phase_manifests.py"
       - "tools/test_repair_verified_phase_manifests.py"
+      - "tools/inspect_master_source_provenance.py"
+      - "tools/test_inspect_master_source_provenance.py"
       - "android/danmemore-launcher/app/src/main/kotlin/dev/danmemore/launcher/LegacyImportPolicy.kt"
 
 permissions:
@@ -45,3 +47,13 @@ jobs:
           python3 -m unittest discover -s tools -p 'test_recover_legacy_apk_assets.py' -v
           python3 -m unittest discover -s tools -p 'test_inspect_legacy_mismatches.py' -v
           python3 -m unittest discover -s tools -p 'test_repair_verified_phase_manifests.py' -v
+
+  master-provenance:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify source metadata parser with synthetic fixtures
+        run: python3 -m unittest discover -s tools -p 'test_inspect_master_source_provenance.py' -v
+      - name: Compare recorded EU master source fingerprints
+        run: python3 tools/inspect_master_source_provenance.py --master data/danmemore-master.json
