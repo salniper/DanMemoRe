@@ -345,6 +345,60 @@ Current classification:
 The original user's archive is **still expected to be rejected**. No
 APK import or AYN Thor runtime smoke test has occurred.
 
+## Separate verified-recovery overlay (2026-11-12)
+
+The 33 absent Phase-1 resources were rechecked against the user's actual
+`com.eu.danmemo_2023-12-22.apk` and original audit: **33/33 exact reference
+MD5 and byte size matches**, independently from the initial detection.
+The three known-restorable phase manifests (`.3`, `.6`, `.7`) were
+also reverified directly from the uploaded source payload:
+**3/3 restored bytes match both the pinned reference MD5 and the repaired
+SHA-256**.
+
+`tools/prepare_legacy_recovery_overlay.py` combines these 36 assets
+without touching the extracted `contents`:
+
+- Checks the original EU APK's pinned SHA-256.
+- Checks `contents/1/project.manifest` against the pinned historical
+  project SHA-256; cross-checks its 33 entries against the audit.
+- Fails unless there are exactly 19 original mismatch audit entries.
+- Rechecks exact original and corrected fingerprints for all 3 phase
+  manifests; rejects changes since the user's first audit.
+- Rejects unexpected, differing files at any of the 33 missing targets.
+- Defaults to **dry-run**. On `--apply`, creates **only a new, distinct**
+  output directory with 36 individually checked files. Never overwrites a
+  source game file, ZIP, APK, previous output, or cached game installation.
+- Reports **16 still unverified files**, and deliberately refuses to
+  describe the partial overlay as a playable or importable game.
+
+Example on the owner's private device, **only after** locating the actual
+2023-12-22 EU APK and original audit:
+
+```bash
+python3 tools/prepare_legacy_recovery_overlay.py \
+  --apk /storage/emulated/0/Download/com.eu.danmemo_2023-12-22.apk \
+  --audit /storage/emulated/0/Download/danmemore_legacy_audit.json \
+  --contents /storage/emulated/0/Download/contents \
+  --output-dir /storage/emulated/0/Download/danmemore_verified_overlay
+```
+
+Add `--apply` **only to create a new isolated overlay** after a successful
+dry run. The overlay is **not** yet a valid complete Legacy Import archive;
+do not attempt to install/import it as such. The original historical
+content, backup RARs and source APK remain unchanged.
+
+### Reference project asset totals are not phase-header size values
+
+The independent current `data/manifests/project.manifest.{1,2,4,8}`
+asset totals are **629,644,526**, **403,167,299**, **1,381,743,123** and
+**279,819,434** bytes respectively. Tested substituting these as the
+`size` field of the user's four remaining phase manifests, along with
+the known version-token substitution. **0/4** matched the expected phase
+MD5. This rules out the naive `size = sum(current project assets)`
+repair for those four files, but does not establish the right values.
+Do not auto-regenerate or trust a phase manifest solely from present
+project asset totals.
+
 ## Recovery sequence
 
 1. **Search for authentic EU-version assets first** from a legitimately
