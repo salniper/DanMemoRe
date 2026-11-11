@@ -56,12 +56,48 @@ def report(master_path: Path, names=DEFAULT_NAMES) -> dict:
             "warning": "A source hash links exported data to exact input bytes, not necessarily to launcher-version compatibility."}
 
 
+def require_matches(export: dict, requirements: dict[str, str]) -> dict:
+    """Fail closed unless each named export records an exact expected source SHA-256.
+
+    A match proves which bytes the committed export used; it does not make
+    that file acceptable to the Launcher's separate strict manifest gate.
+    """
+    found = {r["name"]: r for r in export["results"]}
+    for name, expected in requirements.items():
+        if name not in DEFAULT_NAMES:
+            raise ValueError(f"unsupported required source name: {name}")
+        if not isinstance(expected, str) or len(expected) != 64 or any(
+            x not in "0123456789abcdef" for x in expected
+        ):
+            raise ValueError(f"invalid expected SHA-256 for {name}")
+        record = found.get(name)
+        if record is None or record["status"] != "DECODED_IN_MASTER_EXPORT":
+            raise ValueError(f"required source absent from exported gameplay data: {name}")
+        if record["source_sha256"] != expected:
+            raise ValueError(f"source SHA-256 mismatch: {name}")
+    return {"verified_source_names": sorted(requirements),
+            "source_byte_match_count": len(requirements),
+            "note": "Export provenance verified; launcher reference MD5 is a separate requirement."}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--master", type=Path, required=True)
     parser.add_argument("--names", nargs="*", default=list(DEFAULT_NAMES))
+    parser.add_argument("--require-source-sha", action="append", default=[],
+                        metavar="NAME=SHA256",
+                        help="fail unless exported original-source SHA-256 matches exactly")
     args = parser.parse_args()
-    print(json.dumps(report(args.master, args.names), indent=2, sort_keys=True))
+    requirements = {}
+    for pair in args.require_source_sha:
+        name, separator, sha = pair.partition("=")
+        if not separator or not name or name in requirements:
+            parser.error("invalid or duplicate --require-source-sha NAME=SHA256")
+        requirements[name] = sha
+    result = report(args.master, sorted(set(args.names) | set(requirements)))
+    if requirements:
+        result["verification"] = require_matches(result, requirements)
+    print(json.dumps(result, indent=2, sort_keys=True))
 
 
 if __name__ == "__main__":
