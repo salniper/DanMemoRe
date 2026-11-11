@@ -296,6 +296,48 @@ APK bundled entries. This is consistent with APK-resident default/stub
 data, but the exact client-side fallback semantics have not been proven.
 None of these four pass the reference MD5 and none may be substituted.
 
+## Authentic master-data provenance: two encrypted files (2026-11-12)
+
+The upstream `tools/decode_master_data.cjs` is a native-client-derived
+AES-256-CBC, zlib and FlatBuffers decoder. It reads the original
+`contents/1/master/divide_enc/<name>.enc` bytes and records each input
+SHA-256 and decoded row count under the `sources` object of
+`data/danmemore-master.json`.
+
+We verified this against the published source export using a read-only
+GitHub Actions check:
+[run 43057238235](https://github.com/salniper/DanMemoRe/actions/runs/43057238235).
+The check parses only the compact source-fingerprint JSON prefix;
+it does not publish game data or decryption keys.
+
+| File | Uploaded AYN Thor SHA-256 vs upstream source | Exported rows |
+| --- | --- | ---: |
+| `lotteryWeightGroup.enc` | **exact match:** `0217c8b751ec3baa5a33089a8db1c5b6123bd9301962fa806f450f14d88cbd2a` | 90 |
+| `subscription.enc` | **exact match:** `45e0a9c947fe45e8b9b4122e0e5f88d46cc5ef58e44e559d8fc082870d64e1fb` | 2 |
+| `adventureMission.enc` | not included in upstream's decoded master export | unknown |
+| `downloadVoicePhase.enc` | not included in upstream's decoded master export | unknown |
+
+The two matching sources have much stronger provenance than length/entropy
+alone: the published export associates their **exact source bytes** with
+decoded master records. The other two were **not exported by this tool**;
+absence here is not a failed decryption test, nor proof of corruption.
+
+**Critical distinction:** both matching files still differ from the
+reference and historical `project.manifest` MD5. A successfully decoded
+source export is not the same as authenticated compatibility with the
+strict preserved ZIP import. We have **not** changed the import policy to
+accept these alternative hashes.
+
+Current classification:
+- 3/19 files have byte-exact reference-MD5 repair (phase manifests 3, 6, 7)
+- 2/19 additional files have independent upstream decode-source provenance,
+  but **remain MD5 mismatches** (lotteryWeightGroup, subscription)
+- 14/19 lack either proof: phase manifests 1, 2, 4, 8 (4);
+  story commands (6); other master data (2); image and gacha JSON (2)
+
+The original user's archive is **still expected to be rejected**. No
+APK import or AYN Thor runtime smoke test has occurred.
+
 ## Recovery sequence
 
 1. **Search for authentic EU-version assets first** from a legitimately
