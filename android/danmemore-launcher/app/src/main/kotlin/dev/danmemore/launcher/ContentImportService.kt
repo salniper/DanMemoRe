@@ -37,7 +37,7 @@ class ContentImportService : Service() {
         startForeground(NOTIFICATION_ID, notification("Preparing preserved assets"))
         thread(name = "danmemore-content-import", isDaemon = true) {
             try {
-                ContentImporter(this).importZip(uri) { status ->
+                ContentImporter(this).importZip(uri, intent?.getBooleanExtra(EXTRA_LEGACY_MODE, false) == true) { status ->
                     publish(status)
                     getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification(status))
                 }
@@ -73,6 +73,7 @@ class ContentImportService : Service() {
 
     companion object {
         const val ACTION_IMPORT = "dev.danmemore.launcher.content.IMPORT"
+        const val EXTRA_LEGACY_MODE = "dev.danmemore.launcher.content.LEGACY_MODE"
         private const val CHANNEL_ID = "danmemore_content_import"
         private const val NOTIFICATION_ID = 6602
     }
@@ -108,7 +109,7 @@ private class ContentImporter(private val context: Context) {
     private var lastProgress = 0L
     private lateinit var progress: (String) -> Unit
 
-    fun importZip(uri: Uri, progress: (String) -> Unit) {
+    fun importZip(uri: Uri, legacyMode: Boolean, progress: (String) -> Unit) {
         this.progress = progress
         loadExpectedAssets()
         val cacheRoot = File(context.filesDir, "danmemore/content")
@@ -133,8 +134,9 @@ private class ContentImporter(private val context: Context) {
         sourceArchive.delete()
         check(staging.mkdirs()) { "could not create the content staging directory" }
         try {
-            copySelectedArchive(uri, sourceArchive)
+            copySelectedArchive(uri, sourceArchive, legacyMode)
             extractArchive(sourceArchive, staging)
+            if (legacyMode) verifyPinnedLegacyArchive(staging)
             val missingRoots = DanMemoContentCache.CONTENT_ROOTS.filterNot(roots::contains)
             check(missingRoots.isEmpty()) { "archive is missing ${missingRoots.joinToString()}" }
             check((1..8).all { File(staging, "$it/project.manifest").isFile }) {
@@ -189,7 +191,140 @@ private class ContentImporter(private val context: Context) {
         check(expected.isNotEmpty()) { "bundled content manifests are empty" }
     }
 
-    private fun copySelectedArchive(uri: Uri, destination: File) {
+
+    // Legacy mode is opt-in. This check runs before writePatches(), marker creation,
+    // and atomic activation. Fail closed on any byte that is not pinned to an
+    // original manifest; never rewrite an unverified source file as trusted.
+    private fun verifyPinnedLegacyArchive(staging: File) {
+        val pins = listOf(
+            "0052a4af6f0a8ebb128ff63585cfa1fa342a3c3e5e0104993d74e9b7f44dba35",
+            "6cc7d25c64c8c3d31325ccb79e7f21f497052d667392e10e22d097ebdc16b76c",
+            "6521b16593f16e42b05d0ae13ef13b6d12b16630695e727283da7d747fcc9564",
+            "f47699300251605755286c8b0463343f30df6d4ca2c1f9b58c0da16d323416a9",
+            "a938726af80060530ba5db2f8f1ab5172b2164a23d5390e1f8e2ca9db17d1e45",
+            "1a2224ef66984ae4600646f17b6aa3b8792c949ff7d8397dcd492ae2513e816e",
+            "80cc47827e364286e09896d66be3c9a6e9a5fc9f49bf4f6d7ef524c57aba0c47",
+            "b93ef86c93da1620f54df98167b7bff458d9b9e384a5e80694c6d018ba8f6414"
+        )
+        val versions = listOf(
+            "4ab12a6c3f219553661ff647ae79e322",
+            "4ab12a6c3f219553661ff647ae79e322",
+            "4ab12a6c3f219553661ff647ae79e322",
+            "4ab12a6c3f219553661ff647ae79e322",
+            "4ab12a6c3f219553661ff647ae79e322",
+            "582a6b5539f7766be40c5d2e36aca01b",
+            "582a6b5539f7766be40c5d2e36aca01b",
+            "4ab12a6c3f219553661ff647ae79e322",
+        )
+        val knownMissingPhase1 = setOf(
+            "files/lwf/uiLwf/home/lwf_title_effect/lwf_title_effect_1.lwf",
+            "files/lwf/uiLwf/home/lwf_title_effect/lwf_title_effect_1.png",
+            "files/lwf/uiLwf/home/lwf_title_logo/lwf_title_logo.lwf",
+            "files/lwf/uiLwf/home/lwf_title_logo/lwf_title_logo.png",
+            "files/lwf/uiLwf/iphone_x/home/lwf_title_effect/lwf_title_effect_1.lwf",
+            "files/lwf/uiLwf/iphone_x/home/lwf_title_effect/lwf_title_effect_1.png",
+            "files/sound/bgm/bgm_main_theme.ogg",
+            "files/ui/title/bg_1.jpg",
+            "files/ui/title/iphone_x/bg_1.jpg",
+            "files/ui_atlas/home_other/modal_ai_select_confirm.json",
+            "files/ui_atlas/home_other/modal_charge.json",
+            "files/ui_atlas/home_other/modal_configuration.json",
+            "files/ui_atlas/home_other/modal_configuration_scroll_version_parts.json",
+            "files/ui_atlas/home_other/modal_confirmation.json",
+            "files/ui_atlas/home_other/modal_cp_list.json",
+            "files/ui_atlas/home_other/modal_expired.json",
+            "files/ui_atlas/home_other/modal_feat_list.json",
+            "files/ui_atlas/home_other/modal_feat_list_cell.json",
+            "files/ui_atlas/home_other/modal_help_list.json",
+            "files/ui_atlas/home_other/modal_input_introduction.json",
+            "files/ui_atlas/home_other/modal_news_support.json",
+            "files/ui_atlas/home_other/modal_pvp_caution_confirm.json",
+            "files/ui_atlas/home_other/modal_receipt_result.json",
+            "files/ui_atlas/home_other/modal_social_share.json",
+            "files/ui_atlas/home_other/modal_stamina_error.json",
+            "files/ui_atlas/home_other/modal_transfer_code_publish_complete.json",
+            "files/ui_atlas/home_other/modal_transfer_code_publish_confirm.json",
+            "files/ui_atlas/home_other/present_box_received_confirm_error_celll.json",
+            "files/ui_atlas/home_other/profile_top_character_name.json",
+            "files/ui_atlas/network/modal_maintenance.json",
+            "files/ui_atlas/network/modal_network_error.json",
+            "files/ui_atlas/network/network_state.json",
+            "files/ui_atlas/network/textures.0.plist"
+        )
+        val backgroundFolder = "runtime/manifests/resources/gacha/background"
+        val availableBackgrounds = context.assets.list(backgroundFolder).orEmpty().toSet()
+        check(availableBackgrounds.size == 1544) {
+            "legacy import: expected exactly 1544 bundled fallback gacha backgrounds"
+        }
+
+        var verifiedSource = 0
+        var historicalAlternates = 0
+        var absentSource = 0
+        for (phase in 1..8) {
+            val manifestFile = safeFile(staging, "$phase/project.manifest")
+            check(manifestFile.isFile) { "legacy import: missing phase $phase project.manifest" }
+            val sha256 = MessageDigest.getInstance("SHA-256")
+            manifestFile.inputStream().buffered(COPY_BUFFER_BYTES).use { input ->
+                val buffer = ByteArray(COPY_BUFFER_BYTES)
+                while (true) {
+                    val count = input.read(buffer)
+                    if (count < 0) break
+                    sha256.update(buffer, 0, count)
+                }
+            }
+            check(sha256.digest().toHex() == pins[phase - 1]) {
+                "legacy import: phase $phase project.manifest differs from approved 2024 snapshot"
+            }
+            val historical = JSONObject(manifestFile.readText(Charsets.UTF_8))
+            check(historical.getString("version") == versions[phase - 1]) {
+                "legacy import: unsupported version in phase $phase"
+            }
+            val previousAssets = historical.getJSONObject("assets")
+            val missing = ArrayList<String>()
+            for ((path, reference) in expected) {
+                if (!path.startsWith("$phase/") || path in PATCHED_PATHS) continue
+                val relative = path.removePrefix("$phase/")
+                val actual = resolved[path]
+                if (actual == null) {
+                    missing += relative
+                    continue
+                }
+                if (actual == reference) {
+                    verifiedSource++
+                    continue
+                }
+                val old = previousAssets.optJSONObject(relative)
+                    ?: error("legacy import: unexpected asset not in historical catalog: $path")
+                check(actual.size == old.getLong("size") &&
+                    actual.md5 == old.getString("md5").lowercase(Locale.US)) {
+                    "legacy import: MD5/size mismatch for $path (neither current nor pinned historical)"
+                }
+                historicalAlternates++
+            }
+            when (phase) {
+                1 -> check(missing.all { it in knownMissingPhase1 && previousAssets.has(it) }) {
+                    "legacy import: unexpected missing phase 1 content: " + missing.joinToString()
+                }
+                3 -> check(missing.all {
+                    it.startsWith("files/lottery/background/") &&
+                        it.removePrefix("files/lottery/background/") in availableBackgrounds
+                }) {
+                    "legacy import: phase 3 includes missing content without a bundled fallback"
+                }
+                else -> check(missing.isEmpty()) {
+                    "legacy import: phase $phase has unexpected missing content"
+                }
+            }
+            absentSource += missing.size
+        }
+        check(verifiedSource > 80_000 && historicalAlternates <= 64 && absentSource <= 1_577) {
+            "legacy import: source coverage is outside the reviewed preservation snapshot"
+        }
+        progress("Legacy snapshot verified: $verifiedSource current, " +
+            "$historicalAlternates historical alternatives, $absentSource reviewed missing files")
+    }
+
+    private fun copySelectedArchive(uri: Uri, destination: File, legacyMode: Boolean) {
         progress("Content import: copying the selected ZIP into private storage")
         var copied = 0L
         var lastCopyProgress = 0L
@@ -213,7 +348,7 @@ private class ContentImporter(private val context: Context) {
             }
         } ?: error("Android could not open the selected ZIP")
         check(copied > 0L && destination.length() == copied) { "selected ZIP could not be staged completely" }
-        if (BuildConfig.STRICT_CONTENT_MANIFEST) {
+        if (BuildConfig.STRICT_CONTENT_MANIFEST && !legacyMode) {
             check(copied == EXPECTED_ARCHIVE_BYTES) { "selected ZIP has the wrong size for the 15.1.0 payload" }
             check(sha256.digest().toHex() == EXPECTED_ARCHIVE_SHA256) {
                 "selected ZIP failed the 15.1.0 payload checksum"
