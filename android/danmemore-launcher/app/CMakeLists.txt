@@ -1,5 +1,10 @@
 cmake_minimum_required(VERSION 3.22.1)
 project(danmemore_node_bridge)
+# Node Mobile 24 / V8 headers require C++20; older libnode builds remain
+# ABI-compatible with this source language setting.
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 add_library(danmemore_node_bridge SHARED src/main/cpp/native-lib.cpp)
 target_include_directories(danmemore_node_bridge PRIVATE ${NODE_ROOT}/include/node)
 add_library(libnode SHARED IMPORTED)
