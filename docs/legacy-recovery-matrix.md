@@ -180,6 +180,39 @@ or a reproducible decryption/semantic comparison from original client
 logic. Filename or 16-byte alignment alone is not an acceptance
 criterion. Continue with read-only checks; never rewrite the originals.
 
+## AYN Thor on-device mismatch triage: received 2026-11-11
+
+The user ran `tools/inspect_legacy_mismatches.py` on their AYN Thor and
+supplied `danmemore_mismatch_triage 2(1).json`. Source content was not
+uploaded to the repository; this section records only verified metadata.
+
+- `inspection: ON_DEVICE_REHASH`, `verdict: DO_NOT_IMPORT_UNVERIFIED_BYTES`
+- **19/19** `audit_recheck: MATCH`. This means the device's bytes are
+  unchanged since the previous mismatch audit, **not** that they match
+  trusted expected MD5.
+- Every actual file length equals the reference length. Total: **104,886
+  bytes**. Reference and historical MD5 agree for all 19, but differ
+  from the on-device contents.
+- **7/7** phase manifest files parse as JSON objects, all exposing the
+  same seven keys: `assets`, `engineVersion`, `packageUrl`,
+  `remoteManifestUrl`, `remoteVersionUrl`, `size`, `version`.
+  No actual field values were included in the report; the cause of the
+  mismatch has not yet been determined.
+- **10/10** opaque `.enc` files are 16-byte aligned. This is a weak format
+  property, **not** decryption, integrity, authenticity, or compatibility
+  confirmation.
+- `1/files/font/number.png` has valid PNG chunk framing and CRCs;
+  `3/files/ui_atlas/home_gacha/gacha_top_move_parts_text.json` is
+  syntactically valid JSON. Neither establishes trusted original content.
+
+**Triage conclusion:** There is no evidence of further byte changes on
+the device since the earlier audit, but there is **no new authorization**
+to import any of the 19 mismatching files. No bypass or allowlisting.
+Next: obtain *actual bytes* of only the seven small phase manifests
+(~2.5 KB total) for safe structured comparison, then inspect the remaining
+12 files separately against independent authoritative sources. Avoid
+sharing the whole 12+ GB game backup unnecessarily.
+
 ## Recovery sequence
 
 1. **Search for authentic EU-version assets first** from a legitimately
