@@ -1,6 +1,6 @@
 # Guarded legacy import (2024 preservation snapshot)
 
-> **Status: experimental source-only change. Not a compatible, tested APK.**
+> **Status: compiled experimental debug APK; device runtime and game-content compatibility remain unverified.**
 > The original importer remains the default. Do not merge until the blocked
 > assets are recovered and Android builds plus device tests pass.
 
@@ -123,10 +123,26 @@ The full Node Mobile 24 library is used because its lite variant omits
 features including SQLite/Web Storage; native-bridge ABI and runtime
 compatibility remain subject to build and device acceptance.
 
+## Current CI result
+
+- **JVM policy tests:** passing in GitHub Actions.
+- **Native Android debug build:** succeeded 2026-11-11 after switching
+  JNI CMake compilation to C++20 for V8/Node Mobile 24.
+- **Artifact:** `DanMemoRe-Legacy-Experimental-Debug` from
+  [successful run 42943377358](https://github.com/salniper/DanMemoRe/actions/runs/42943377358).
+  It uses an independent Android package name, not an upgrade for the
+  user's existing Launcher.
+- **Still blocked:** 19 files mismatch both historical and current
+  catalogs; 33 Phase-1 assets are missing. No one has demonstrated a
+  successful preserved-content import, client launch, login, story or battle
+  on the AYN Thor. Artifact publication does **not** clear these blockers.
+
 ## Acceptance before changing from draft PR
 
-- [ ] Android build with Java 17, Android SDK 36, NDK 27.2.12479018,
-      Gradle 8.14.3 and externally supplied Node Mobile `libnode.so`.
+- [x] Android debug APK compiled on GitHub Actions with Java 17, SDK 36,
+      NDK 27.2.12479018, Gradle 8.14.3 and SHA-256-pinned Node Mobile 24.
+      [Build run 42943377358](https://github.com/salniper/DanMemoRe/actions/runs/42943377358)
+      succeeded; the isolated APK is **not** yet device-tested.
 - [ ] Test: original verified 15.1.0 ZIP still accepts in the normal path.
 - [ ] Test: random/altered ZIP fails normal exact SHA check.
 - [ ] Test: historical ZIP with mismatched project.manifest SHA fails closed.
