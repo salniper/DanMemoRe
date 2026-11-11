@@ -40,6 +40,43 @@ values are already pinned in the importer.
 The 33 file paths total far less than the preserved game archive. The main
 difficulty is authenticity and runtime compatibility, not download bandwidth.
 
+## Verified source for all 33 missing files (2026-11-11)
+
+The preserved public Google Drive backup includes the original
+`com.eu.danmemo_2023-12-22.apk` (80,881,609 bytes). This **EU** APK has been
+inspected directly, rather than assuming Taiwanese assets are interchangeable.
+
+Pinned source APK SHA-256:
+`36713f18a6e9fec3302384b8d67383b12761f782d73932cb62b31b230053c3b6`
+
+**Result: all 33 missing files are present in the APK and all 33 match the
+reference *and historical* MD5 and size.**
+- 32 files live under `assets/common/<path-without-phase>`.
+- `1/files/sound/bgm/bgm_main_theme.ogg` lives under
+  `assets/files/sound/bgm/bgm_main_theme.ogg`.
+- Combined verified size: **3,323,167 bytes**.
+- The checked files include logo animation, normal and iPhone X title
+  backgrounds, BGM and UI/atlas JSON and plist data.
+
+The tool `tools/recover_legacy_apk_assets.py` uses the original APK on
+the user's own device. It does not commit, redistribute or re-download
+game assets. It defaults to a **dry run**; `--apply` can add only files
+that are absent and match pinned per-file MD5 + size. It will not
+silently replace existing files. It also pins the user's historical
+`contents/1/project.manifest` SHA-256.
+
+```bash
+python3 tools/recover_legacy_apk_assets.py \
+  --apk /path/to/com.eu.danmemo_2023-12-22.apk \
+  --audit /path/to/danmemore_legacy_audit.json \
+  --contents /path/to/contents
+# Add --apply ONLY after inspecting dry-run output.
+```
+
+**The 19 unrelated mismatches remain a hard blocker** for strict Legacy
+Import. Recovering these 33 assets does not make the archive bootable.
+Keep the original six RAR parts untouched.
+
 ## Recovery sequence
 
 1. **Search for authentic EU-version assets first** from a legitimately
