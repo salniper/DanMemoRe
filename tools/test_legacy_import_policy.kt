@@ -44,5 +44,5 @@ fun main() {
     check(!LegacyImportPolicy.permitsMissing(3, "files/ui/title/bg_1.jpg", true, gacha))
     check(!LegacyImportPolicy.permitsMissing(4, "files/lottery/background/$gachaName", false, gacha))
 
-    println("LegacyImportPolicy: 17 assertions passed")
+    println("LegacyImportPolicy: 15 assertions passed")
 }
