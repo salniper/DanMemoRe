@@ -77,6 +77,61 @@ python3 tools/recover_legacy_apk_assets.py \
 Import. Recovering these 33 assets does not make the archive bootable.
 Keep the original six RAR parts untouched.
 
+## 19 mismatches: audited facts and next forensic pass (2026-11-11)
+
+Compared the actual user audit metadata to both historical and reference
+fingerprints and searched the original 2023-12-22 EU APK's entries for exact
+expected MD5 and size.
+
+| Finding | Result |
+| --- | --- |
+| Unknown local file fingerprints | **19** |
+| Sum of these 19 file lengths | **104,886 bytes** |
+| Actual lengths equal referenced lengths | **19/19** |
+| Reference MD5 equals pinned historical MD5 | **19/19** |
+| Exact MD5+size matches among candidate files in original EU APK | **0/19** |
+
+Breakdown: **7 phase metadata**, **6 encrypted story commands**,
+**4 encrypted game catalogs**, **1 PNG font texture**, **1 gacha UI JSON**.
+
+Matching size does **not** establish correctness. Identical reference and
+historical hashes rule out automatic acceptance as a known different pinned
+snapshot. A different encryption key/IV, changed in-place content, or storage
+corruption are hypotheses, **not** confirmed causes.
+
+The EU APK genuinely contains all previously absent 33 assets, but does
+**not** furnish byte-exact replacements for these 19 mismatches.
+
+### Device-side read-only diagnostic
+
+The new `tools/inspect_legacy_mismatches.py` is intentionally separate from
+the recovery writer. Use the original audit and the preserved extraction:
+
+```bash
+python3 tools/inspect_legacy_mismatches.py \
+  --audit /storage/emulated/0/Download/danmemore_legacy_audit.json \
+  --contents /storage/emulated/0/Download/contents \
+  --output /storage/emulated/0/Download/danmemore_mismatch_triage.json
+```
+
+This checks actual bytes against the audit again and reports SHA-256
+fingerprints, PNG chunk CRCs, JSON parsing where applicable, and whether
+opaque `.enc` files have a 16-byte-aligned length. **None of these format
+checks authorize mismatched bytes**. No game content is included in the JSON
+result. All source paths are only read; output must be outside `contents`
+and will refuse to overwrite a pre-existing report.
+
+Without `--contents`, only audit-metadata classification is possible;
+this cannot distinguish legitimate content changes from data corruption.
+
+Nine synthetic negative/positive Python regression tests run in the
+`Legacy Import policy` workflow, alongside recovery and Kotlin tests.
+
+**Next decision gate:** review on-device report, then look for a
+*second independently preserved EU dump* or another trusted asset source
+for exact SHA/MD5 recovery. Do not patch original data or bypass the 19
+file-level checks on the strength of metadata alone.
+
 ## Recovery sequence
 
 1. **Search for authentic EU-version assets first** from a legitimately
