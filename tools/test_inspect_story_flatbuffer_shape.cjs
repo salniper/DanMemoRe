@@ -36,7 +36,7 @@ assert.equal(inspectRootVector(Buffer.alloc(0)).status,'NOT_STRUCTURALLY_PROVEN'
  assert.equal(inspectRootVector(invalid).status,'NOT_STRUCTURALLY_PROVEN');
 }
 {
- const invalid=fixture();invalid.writeUInt16LE(9,58);
+ const invalid=fixture();invalid.writeUInt16LE(2,58);
  assert.equal(inspectRootVector(invalid).status,'NOT_STRUCTURALLY_PROVEN');
 }
 console.log('Synthetic FlatBuffers root/vector/table structure: 7 assertions PASS');
