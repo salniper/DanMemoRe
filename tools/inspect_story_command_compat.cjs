@@ -7,6 +7,7 @@ const crypto = require('node:crypto');
 const { nativeMasterConfig, decodeFile } = require('./decode_master_data.cjs');
 const { inspectRootVector } = require('./inspect_story_flatbuffer_shape.cjs');
 const { profileStoryFields } = require('./inspect_story_field_profile.cjs');
+const { analyzeSix } = require('./inspect_story_command_sequence.cjs');
 
 const IDS = ['751040548','751040550','751040806','751040815','751041273','751041275'];
 const PREFIX = '1/master/divide_novel_command_enc/';
@@ -33,6 +34,7 @@ function inspect(audit, contents, image) {
   if (entries.length !== IDS.length) throw Error('expected exactly six story command mismatches');
   const seen = new Set();
   const config = image ? nativeMasterConfig(image) : null; // SHA-256-pinned original 15.1.0 binary only
+  const decodedForSequence = new Map();
   const results = entries.map(entry => {
     const name = entry.path.slice(PREFIX.length);
     if (!IDS.some(id => name === 'novelCommand' + id + '.enc') || seen.has(name))
@@ -65,6 +67,8 @@ function inspect(audit, contents, image) {
         if (row.structure_probe.status === 'FLATBUFFERS_ROOT_VECTOR_NESTED_TABLES_CONSISTENT') {
           try {
             row.field_profile = profileStoryFields(plain, config.numericKey);
+            if (row.field_profile.status === 'STRUCTURAL_FIELD_CANDIDATES_ONLY_NOT_SCHEMA')
+              decodedForSequence.set(name.slice('novelCommand'.length, -'.enc'.length), plain);
           } catch (_) {
             // A field-analysis failure does not invalidate a successful
             // decrypt/inflate; it must also never authorize this import.
@@ -78,8 +82,17 @@ function inspect(audit, contents, image) {
     return row;
   });
   if (seen.size !== IDS.length) throw Error('incomplete story command set');
+  let commandSequenceEvidence = {status:'NOT_RUN_OR_INCOMPLETE'};
+  if (config && decodedForSequence.size === IDS.length) {
+    try {
+      commandSequenceEvidence = analyzeSix(decodedForSequence, config.numericKey);
+    } catch (_) {
+      commandSequenceEvidence = {status:'ORIGINAL_SEQUENCE_STRUCTURE_NOT_PROVEN'};
+    }
+  }
   return { verdict: 'DO_NOT_IMPORT_UNVERIFIED_BYTES', file_count: results.length,
-    decoder_scope: 'Master AES-CBC/zlib and generic FlatBuffers root vector only; success is NOT original novel schema or runtime proof',
+    decoder_scope: 'Original Master AES-CBC/zlib with inferred FlatBuffers command slot shapes only; runtime playback and reference MD5 remain unverified',
+    command_sequence_evidence:commandSequenceEvidence,
     results };
 }
 function main(args) {
