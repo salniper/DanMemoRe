@@ -113,6 +113,43 @@ class OriginalDirectCalleeTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "verified caller"):
             callees.inspect_direct_callees(blob, source_report(), frames, precise)
 
+    def test_exact_second_hop_original_callee_code_classifies_only(self):
+        blob = two_frame_fixture()
+        # In second FDE 0x1080-0x10b0, compare W0 with 11.
+        struct.pack_into("<I", blob, 0x180, 0x71002c1f)
+        struct.pack_into("<I", blob, 0x184, 0x94000006)  # BL to 0x109c
+        struct.pack_into("<I", blob, 0x188, 0xd63f0200)  # BLR X16
+        frames, precise = caller_reports(blob)
+        references = callees.inspect_direct_callees(blob, source_report(),
+                                                     frames, precise)
+        summary = callees.classify_direct_callee_code(blob, references)
+        self.assertEqual(summary["status"], "ONE_HOP_ORIGINAL_FDE_CODE_SHAPES_ONLY")
+        self.assertEqual(summary["verified_callee_fde_regions"], 1)
+        region = summary["callee_regions"][0]
+        self.assertEqual(region["instruction_word_count"], 12)
+        self.assertEqual(region["small_immediate_cmp_histogram"][11], 1)
+        self.assertEqual(
+            region["observed_story_opcode_values_also_present_as_cmp_immediates"],
+            [11])
+        self.assertEqual(region["unique_second_hop_direct_call_targets"], 1)
+        self.assertEqual(region["second_hop_direct_call_count"], 1)
+        self.assertEqual(region["instruction_class_counts"]["CALL_INDIRECT"], 1)
+        self.assertFalse(region["actual_opcode_dispatch_proven"])
+        self.assertEqual(summary["numeric_opcode_handler_mappings_proven"], 0)
+        self.assertFalse(summary["original_import_authorized"])
+
+    def test_uncertain_unwound_source_does_not_get_code_semantics(self):
+        blob = two_frame_fixture(callee=0x2000)
+        frames, precise = caller_reports(blob)
+        report = callees.inspect_direct_callees(blob, source_report(),
+                                                frames, precise)
+        summary = callees.classify_direct_callee_code(blob, report)
+        self.assertEqual(summary["verified_callee_fde_regions"], 0)
+
+    def test_unverified_report_cannot_request_second_hop(self):
+        with self.assertRaisesRegex(ValueError, "validated original"):
+            callees.classify_direct_callee_code(two_frame_fixture(), {})
+
     def test_unverified_mapping_only_metadata(self):
         blob = two_frame_fixture()
         frames, precise = caller_reports(blob)
