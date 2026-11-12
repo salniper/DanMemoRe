@@ -566,3 +566,32 @@ tracing its string-building/file-open and decrypt/decompress calls
 through the real native loader. Only after the complete call chain is
 verified should the six observed novel command files be tested against
 the verified decoder and schema. Reference MD5 restrictions remain.
+
+
+## Real compiler evidence: ADR was previously missed (2026-11-12)
+
+A minimal C source returning the literal strings `divide_novel_command_enc`
+and `novelCommand` was compiled locally using Clang with
+`--target=aarch64-linux-gnu -fPIC -O2 -fuse-ld=lld -nostdlib -shared`.
+The resulting synthetic AArch64 ELF was independently inspected using
+`llvm-objdump` and the segment mapping analyzer:
+
+- `divide_novel_command_enc`: compiler emitted single `ADR` at
+  ELF file offset `0x310` (virtual address `0x10310`) to literal
+  virtual address `0x290`. The previous adjacent-ADRP+ADD-only scanner
+  reported **zero candidates** for this genuine reference.
+- `novelCommand`: compiler emitted adjacent `ADRP + ADD` at
+  virtual addresses `0x10318` and `0x1031c`; the previous scanner
+  found this candidate correctly.
+- The scanner now also recognizes direct `ADR` PC-relative immediates;
+  a synthetic ADR fixture tests this instruction path.
+
+These are **compiler-generated synthetic fixtures**, not original game
+binary addresses. The result establishes a real false-negative class,
+not the actual novel loader, encryption path, or six-file compatibility.
+Additional compiler idioms (GOT indirections, LDR literals, multi-step
+register flows) remain outside this bounded scanner. A no-hit result
+must never be treated as proof of loader absence.
+
+The new test's CI conclusion remains a separate verification requirement.
+No import guard, game content, Android install, or `main` branch was changed.
