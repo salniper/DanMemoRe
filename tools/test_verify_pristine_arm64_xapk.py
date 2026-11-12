@@ -66,6 +66,32 @@ class PristineArm64XapkTests(unittest.TestCase):
         self.assertEqual(report["story_address_candidates"], {"marker": "synthetic"})
         self.assertFalse(report["import_authorized"])
 
+    def test_context_requires_explicit_scan(self):
+        with self.assertRaisesRegex(ValueError, "requires --scan"):
+            self.check(context=True)
+
+    def test_context_after_both_fingerprints_match(self):
+        from unittest.mock import patch
+        import inspect_native_novel_xref_context as context
+        scan_result = {"markers": [], "status": "synthetic"}
+        with patch.object(source, "inspect", return_value=scan_result) as scanner:
+            with patch.object(context, "inspect_context",
+                              return_value={"status": "bounded"}) as tracer:
+                report = self.check(scan=True, context=True)
+        scanner.assert_called_once_with(self.library)
+        tracer.assert_called_once_with(self.library, scan_result)
+        self.assertEqual(report["story_code_context"]["status"], "bounded")
+        self.assertFalse(report["import_authorized"])
+
+    def test_wrong_native_hash_cannot_reach_context(self):
+        from unittest.mock import patch
+        import inspect_native_novel_xref_context as context
+        with patch.object(context, "inspect_context") as tracer:
+            with self.assertRaisesRegex(ValueError, "libapp.so SHA-256"):
+                source.inspect_xapk(self.path, archive_sha1=self.archive_hash,
+                                    library_sha256="0" * 64, scan=True, context=True)
+            tracer.assert_not_called()
+
     def test_wrong_archive_fingerprint_rejected(self):
         with self.assertRaisesRegex(ValueError, "XAPK fingerprint mismatch"):
             source.inspect_xapk(self.path, archive_sha1="0" * 40,
