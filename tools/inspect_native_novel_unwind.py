@@ -11,7 +11,7 @@ import struct
 
 from inspect_elf_novel_xrefs import elf_segments, map_offset
 from inspect_native_novel_elf_sections import parse_sections
-from inspect_native_novel_executor_flow import _is_executor_label
+from inspect_native_novel_executor_flow import _is_executor_label, _decode_control
 
 MAX_FDE_ENTRIES = 350000
 MAX_FDE_RANGE = 4 * 1024 * 1024
@@ -261,5 +261,95 @@ def find_executor_unwind_frames(blob, reference_report):
             "CIE/FDE-covered code ranges are authenticated unwinding regions, "
             "not independent proof of a C++ method name, constructor dispatch, "
             "or numeric opcode-to-handler semantics."
+        ),
+    }
+
+
+def summarize_verified_fde_instructions(blob, frame_report):
+    """Analyze EXACT original unwind-covered executable bytes, not +/-4KiB.
+
+    Counts classes, branches, and small comparisons only. A CFI covered range
+    is not proof of a native handler name, constructor or opcode meaning.
+    """
+    sections = parse_sections(blob)
+    segments = elf_segments(blob)
+    distinct = {}
+    for row in frame_report.get("sites", ()):
+        if row.get("status") != "VALIDATED_ORIGINAL_UNWIND_COVERAGE":
+            continue
+        coverage = row["unwind_coverage"]
+        distinct[(coverage["start_va"], coverage["end_va_exclusive"])] = coverage
+    if len(distinct) > 12:
+        raise ValueError("too many distinct original executor FDE code regions")
+    code = []
+    for (start_va, end_va), coverage in sorted(distinct.items()):
+        start = _va_to_file(segments, start_va)
+        length = end_va - start_va
+        if start is None or length <= 0 or length > MAX_FDE_RANGE or length % 4:
+            raise ValueError("unmapped or unaligned FDE code range")
+        exec_sections = [x for x in sections
+                         if x["flags"] & 4 and x["type"] == 1
+                         and x["addr"] <= start_va and
+                         end_va <= x["addr"] + x["size"]]
+        if len(exec_sections) != 1:
+            raise ValueError("unwind FDE range is not uniquely in ELF executable code")
+        from collections import Counter
+        kinds, small_comparisons = Counter(), Counter()
+        calls = []
+        conditional = []
+        indirect = []
+        internal_branches = 0
+        outside_branches = 0
+        for off in range(start, start + length, 4):
+            word = struct.unpack_from("<I", blob, off)[0]
+            va = start_va + off - start
+            kind, value = _decode_control(word, va)
+            if kind is None:
+                continue
+            kinds[kind] += 1
+            if kind == "CMP_IMMEDIATE" and isinstance(value, int) and 0 <= value <= 256:
+                small_comparisons[value] += 1
+            if kind == "CALL_DIRECT":
+                if len(calls) < 60:
+                    calls.append({"from_va":va,"to_va":value})
+            if kind in ("BRANCH_DIRECT", "BRANCH_CONDITIONAL",
+                        "BRANCH_COMPARE_ZERO", "BRANCH_BIT_TEST"):
+                if start_va <= value < end_va:
+                    internal_branches += 1
+                else:
+                    outside_branches += 1
+                if kind != "BRANCH_DIRECT" and len(conditional) < 48:
+                    conditional.append({"source_va":va,"target_va":value,
+                                        "kind":kind})
+            if kind in ("CALL_INDIRECT", "BRANCH_INDIRECT") and len(indirect) < 32:
+                indirect.append({"instruction_va":va,"kind":kind})
+        code.append({
+            "validated_unwind_start_va":start_va,
+            "validated_unwind_end_va_exclusive":end_va,
+            "instruction_word_count":length // 4,
+            "instruction_class_counts":dict(kinds),
+            "immediate_comparisons_up_to_256":dict(sorted(small_comparisons.items())),
+            "direct_call_count":kinds.get("CALL_DIRECT",0),
+            "direct_call_sites":calls,
+            "direct_call_sites_truncated":kinds.get("CALL_DIRECT",0)>len(calls),
+            "conditional_branch_sites":conditional,
+            "conditional_branch_sites_truncated":
+                sum(kinds.get(k,0) for k in ("BRANCH_CONDITIONAL",
+                     "BRANCH_COMPARE_ZERO","BRANCH_BIT_TEST"))>len(conditional),
+            "indirect_call_or_branch_sites":indirect,
+            "branches_within_region":internal_branches,
+            "branches_outside_region":outside_branches,
+            "original_native_opcode_mapping_proven":False,
+        })
+    return {
+        "status":"EXACT_CFI_REGION_INSTRUCTION_CLASS_METADATA_NO_OPCODE_PROOF",
+        "distinct_verified_unwind_regions":len(code),
+        "regions":code,
+        "verified_numeric_opcode_handler_pairs":0,
+        "import_authorized":False,
+        "limitations":(
+            "Only decoded instruction-class, comparison and branch-target metadata "
+            "within exact FDE coverage. No def-use/SSA, original factory path "
+            "validation, constructor symbols or executable story playback proof."
         ),
     }
