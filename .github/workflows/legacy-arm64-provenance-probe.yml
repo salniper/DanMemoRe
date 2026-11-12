@@ -87,6 +87,18 @@ jobs:
                 str(report["code_site_candidates"]))
           print("native_dispatch_opcode_mappings_verified=" +
                 str(report["numeric_opcode_to_handler_mappings_verified"]))
+          executor=report["original_executor_neighborhoods"]
+          print("native_createNovel_source_anchored_sites=" +
+                str(executor["executor_site_count"]))
+          print("native_createNovel_dispatch_mapping_proven=" +
+                str(executor["native_opcode_handler_mapping_count"]))
+          for site in executor.get("sites", [])[:8]:
+              print("native_createNovel_code_neighborhood=" + json.dumps({
+                  "source_anchor_offset":site["anchor_file_offset"],
+                  "instruction_classes":site["instruction_classes"],
+                  "small_immediate_comparisons":site["small_immediate_cmp_histogram"],
+                  "bounded_control_flow_events":site["bounded_control_flow_events"][:8],
+              },sort_keys=True))
           for row in report["candidate_referenced_labels"][:30]:
               print("native_novel_code_reference=" + json.dumps({
                   "kind": row["kind"],
