@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Stage 33 APK-authenticated game assets plus 3 exact-repaired phase manifests.
+"""Stage 33 APK-authenticated game assets plus 7 exact-repaired phase manifests.
 
-This intentionally does NOT make the 2024 archive importable: 16 mismatched
+This intentionally does NOT make the 2024 archive importable: 12 mismatched
 assets remain unverified. All assets come from the user's own local APK and
 contents; no proprietary files are embedded or written to the repository.
 
@@ -23,8 +23,6 @@ from recover_legacy_apk_assets import (
 from repair_verified_phase_manifests import REPAIRS, verified_repair
 
 EXPECTED_MISMATCH_COUNT = 19
-EXPECTED_OVERLAY_COUNT = 36
-REMAINING_UNVERIFIED = 16
 
 
 def _source_file(contents: Path, relative: str) -> Path:
@@ -100,13 +98,15 @@ def prepare(apk: Path, audit: Path, contents: Path, output_dir: Path,
                 raise ValueError(f"EU APK lacks one unique verified copy: {name}")
             prepared[name] = matches[0]
 
-    if len(prepared) != EXPECTED_OVERLAY_COUNT:
-        raise ValueError(f"overlay should contain 36 verified assets, found {len(prepared)}")
+    expected_overlay_count = len(targets) + len(REPAIRS)
+    remaining_unverified = EXPECTED_MISMATCH_COUNT - len(REPAIRS)
+    if remaining_unverified < 0 or len(prepared) != expected_overlay_count:
+        raise ValueError(f"overlay should contain {expected_overlay_count} verified assets, found {len(prepared)}")
     report = {
         "verdict": "PARTIAL_OVERLAY_ONLY_NOT_IMPORTABLE",
         "verified_original_apk_assets": len(targets),
         "verified_repaired_phase_manifests": len(REPAIRS),
-        "remaining_unverified_mismatches": REMAINING_UNVERIFIED,
+        "remaining_unverified_mismatches": remaining_unverified,
         "prepared_files": sorted(prepared),
         "output": str(out),
         "applied": False,
@@ -138,7 +138,7 @@ def main():
     parser.add_argument("--contents", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--apply", action="store_true",
-                        help="create NEW separate overlay with 36 verified files")
+                        help="create NEW separate overlay with SHA/MD5 verified files")
     args = parser.parse_args()
     print(json.dumps(
         prepare(args.apk, args.audit, args.contents, args.output_dir, args.apply),
