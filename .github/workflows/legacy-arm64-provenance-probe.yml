@@ -94,6 +94,12 @@ jobs:
                 str(executor["executor_site_count"]))
           print("native_createNovel_dispatch_mapping_proven=" +
                 str(executor["native_opcode_handler_mapping_count"]))
+          unwind = report["original_executor_unwind_frames"]
+          print("original_unwind_fde_index_entries=" + str(unwind["fde_index_entries"]))
+          print("original_executor_unwind_covered_anchors=" +
+                str(unwind["exact_fde_coverage_count"]))
+          for row in unwind["sites"]:
+              print("original_executor_cfi_site=" + json.dumps(row,sort_keys=True))
           for site in executor.get("sites", [])[:8]:
               print("native_createNovel_code_neighborhood=" + json.dumps({
                   "source_anchor_offset":site["anchor_file_offset"],
