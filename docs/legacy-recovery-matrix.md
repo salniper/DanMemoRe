@@ -478,3 +478,46 @@ tracking the **observed unverified backup**, not an alternative import allowlist
 The equal-length pairs (548/1273 and 550/1275) have **different
 SHA-256s**. Equal length alone does not demonstrate identical commands or
 a shared schema. All six remain reference-MD5 mismatches.
+
+
+## Native novel-command loader discovery: bounded static evidence pass (2026-11-12)
+
+Review of existing repository source found an independently pinned native-derived
+**master** decoder (`tools/decode_master_data.cjs`) for AES-256-CBC, zlib
+and FlatBuffers master tables. That implementation reads from
+`1/master/divide_enc/`, **not**
+`1/master/divide_novel_command_enc/`. The existing offline-client
+bootstrap reaches an interactive opening story in an ARM64 emulator,
+but this is **not evidence** that the six mismatched preserved story
+commands parse or load.
+
+New tool: `tools/inspect_native_novel_loader_markers.py`.
+
+- Accepts only the pristine original 15.1.0 ARM64 binary whose exact
+  SHA-256 is already pinned in `decode_master_data.cjs`.
+- Performs literal, read-only scans for likely novel-command loader
+  path/name markers and reports only hit counts and bounded *file offsets*.
+  Outputs neither binary bytes, decrypted text, keys nor game assets.
+- Filesystem symlinks, wrong SHA-256, empty or oversized binaries fail
+  closed. Six synthetic regression tests cover matches, absent markers,
+  truncation, wrong hash, symlink and input bounds.
+- Literal matches are **not** function boundaries, virtual addresses,
+  call references, native parser proof or authenticity evidence.
+  No literal match is likewise not evidence the loader does not exist.
+- **No actual original ARM64 image was scanned during this research pass**;
+  the results must remain `NOT_RUN` until an independently pinned
+  binary is made available to the analysis environment.
+
+Offline usage on an existing research checkout with the intact binary:
+```bash
+python3 tools/inspect_native_novel_loader_markers.py \
+  --binary /path/to/pristine_15.1.0_arm64.so
+```
+
+Next native proof gate: correlate any candidate literal file offsets with
+ELF segment mapping and real AArch64 code references; document the
+file-open, decrypt/decompress and parser chain from the actual native
+client. Afterward, separately check the six observed encrypted bytes
+against that verified chain, with schema/semantic validation and the
+reference MD5 barrier kept intact. No AYN Thor install or import is
+justified by this scan alone.
