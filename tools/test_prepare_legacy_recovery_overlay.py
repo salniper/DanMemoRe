@@ -1,4 +1,4 @@
-"""Synthetic tests for isolated 36-file legacy recovery overlay.
+"""Synthetic tests for isolated 40-file legacy recovery overlay.
 
 Fixtures contain no game assets, private keys, or third-party binary content.
 """
@@ -56,7 +56,7 @@ class OverlayTests(unittest.TestCase):
                                            sha(manifest.read_bytes()))
         self.patch_manifest.start()
         self.addCleanup(self.patch_manifest.stop)
-        for n in (3, 6, 7):
+        for n in (1, 2, 3, 4, 6, 7, 8):
             name = f"1/manifests/phase.manifest.{n}"
             old = repair.SOURCE_VERSION.decode()
             obj = {"assets": {}, "version": old,
@@ -76,7 +76,7 @@ class OverlayTests(unittest.TestCase):
             issues.append({"status": "unverified_bytes", "path": name,
                            "reference_size": len(source), "reference_md5": md5(fixed),
                            "actual_md5": md5(source)})
-        for i in range(16):
+        for i in range(12):
             issues.append({"status": "unverified_bytes", "path": f"1/files/unknown{i}.enc",
                            "reference_size": 16, "reference_md5": "0" * 32,
                            "actual_md5": "1" * 32})
@@ -101,16 +101,16 @@ class OverlayTests(unittest.TestCase):
         before = (self.contents / "1/project.manifest").read_bytes()
         result = self.call()
         self.assertEqual(result["verified_original_apk_assets"], 33)
-        self.assertEqual(result["verified_repaired_phase_manifests"], 3)
-        self.assertEqual(result["remaining_unverified_mismatches"], 16)
+        self.assertEqual(result["verified_repaired_phase_manifests"], 7)
+        self.assertEqual(result["remaining_unverified_mismatches"], 12)
         self.assertFalse(result["applied"])
         self.assertFalse(self.out.exists())
         self.assertEqual((self.contents / "1/project.manifest").read_bytes(), before)
 
-    def test_apply_creates_exact_36_byte_verified_copies(self):
+    def test_apply_creates_exact_40_byte_verified_copies(self):
         result = self.call(True)
         self.assertTrue(result["applied"])
-        self.assertEqual(len([p for p in self.out.rglob("*") if p.is_file()]), 36)
+        self.assertEqual(len([p for p in self.out.rglob("*") if p.is_file()]), 40)
         for name, data in self.assets.items():
             self.assertEqual((self.out / name).read_bytes(), data)
             self.assertFalse((self.contents / name).exists())
