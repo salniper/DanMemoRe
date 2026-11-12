@@ -318,3 +318,68 @@ the seven indirect calls in the 1,424-byte original executor FDE.
 Keep the original asset-reference MD5 guard intact: exactly
 **7/19** repaired; **12** mismatches and original device playback
 remain unverified. PR stays Draft; do not merge.
+
+
+## 8. Seven original indirect calls: two pointer loads, same vtable-shaped slot (2026-11-13)
+
+The next original-client pass inspected **only the independently verified
+1,424-byte CIE/FDE-covered ELF executable region** using the same
+cryptographically pinned EU 15.1.0 ARM64 source. It classified \`BLR\`
+register targets and their nearest *syntactically identifiable*
+preceding 64-bit load instructions. Source code and original game bytes
+were never emitted.
+
+[Actual SHA-authenticated BLR provenance](https://github.com/salniper/DanMemoRe/actions/runs/43264838249):
+
+- **7/7 \`BLR\` calls** use **X8**.
+- Each **immediately preceding instruction** has the exact decoded
+  form \`LDR X8, [X8, #16]\`.
+- In each case, the nearest earlier **writer of X8** is a
+  \`LDR X8, [Xobject, #0]\` whose base register is one of
+  X19, X20, X21 or X24.
+- For the bounded 24-instruction backward window,
+  **no recognized control-transfer barrier** intervened between
+  the source load and the final call. These are *linear syntactic*
+  observations, not full SSA or runtime pointers.
+- All seven form the classic *vtable-shaped* pattern
+  \`LDR X8,[Xobject]; LDR X8,[X8,#16]; BLR X8\`.
+  The object identity, memory contents and actual function pointer
+  address are still unknown.
+
+| Original call VA | Source of first pointer | Final pointer load | Interpretation |
+| ---: | --- | --- | --- |
+| 33417672 | X24 + 0 | X8 + 16 | Candidate virtual-call shape |
+| 33418048 | X20 + 0 | X8 + 16 | Candidate virtual-call shape |
+| 33418076 | X24 + 0 | X8 + 16 | Candidate virtual-call shape |
+| 33418388 | X19 + 0 | X8 + 16 | Candidate virtual-call shape |
+| 33418712 | X21 + 0 | X8 + 16 | Candidate virtual-call shape |
+| 33418764 | X20 + 0 | X8 + 16 | Candidate virtual-call shape |
+| 33418828 | X20 + 0 | X8 + 16 | Candidate virtual-call shape |
+
+The offset \`#16\` is **relative to the pointer currently in X8**;
+it is **not** a proven physical vtable start, method number, or
+\`NovelCommand\` opcode. C++ ABIs can use vtable address-point
+adjustments, and the register contents might still be something else.
+The decoded static instructions do not prove that those virtual
+dispatches occur during story playback.
+
+The new
+[\`tools/inspect_native_novel_indirect_calls.py\`](../tools/inspect_native_novel_indirect_calls.py)
+uses a strict whitelist of common AArch64 register-load/ADR/MOV
+patterns and explicitly labels every proposed earlier register
+definition \`LINEAR_SYNTAX_ONLY_NOT_REACHING_DEFINITION\`.
+Synthetic tests include literal/page addressing, register copies,
+branch barriers, unrecognized writers, malformed CFI coverage,
+and metadata-count mismatches.
+No original client binary, owner assets or keys are committed.
+
+**Implication for the next research pass:** Track the lifetime/origin
+of X19, X20, X21, X24 and original construction/assignment sites,
+or perform controlled runtime logging of the actual vtable pointer
+contents on a disposable original-client environment. A verified
+call-target identity and numeric slot-2 opcode flow are required
+before registering any of the 25 opcode handlers.
+
+**No opcode-to-handler mapping was authorized (0/25); no playback
+implemented; reference MD5 import blockers remain 12/19.** PR #1
+continues as Draft with \`main\` and owner backups untouched.
