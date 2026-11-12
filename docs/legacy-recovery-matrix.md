@@ -1011,3 +1011,74 @@ version, not necessarily corruption. An inflate **success** indicates
 only compression compatibility; it is NOT a native novel-schema/loader
 proof, much less reference MD5 authentication. All 12 residual mismatches
 remain blocked, PR stays Draft, and no AYN Thor gameplay has been tested.
+
+
+## Actual owner ciphertext decode using original ARM64 Master configuration (2026-11-12)
+
+**Major new empirical result, superseding the earlier "not yet run" disclaimer
+above:** The six ciphertexts uploaded by the owner were decoded *locally*,
+using the exact 15.1.0 EU native **Master AES-256-CBC key and IV** recovered
+from an independently authenticated original ARM64 `libapp.so`.
+
+- The [ephemeral authenticated original-native run](https://github.com/salniper/DanMemoRe/actions/runs/43200150554)
+  verified XAPK source SHA-1 and nested original native SHA-256
+  `e49a8cc7991f8946365a28aebad605ce566b034826dd4b34a982ab18b38303b3`.
+- For safe separation of environments, a **one-shot RSA-3072 OAEP-SHA256
+  public-key envelope** carried only encrypted Master AES/IV configuration
+  to the owner's local analysis context. The RSA private key and original
+  six ciphertexts were NOT uploaded to GitHub; the original XAPK and
+  unencrypted source crypto material were never committed or printed.
+  The one-time exchange workflow was removed after completion.
+- The owner's actual base64 payload and audit were re-read unchanged;
+  every tested source file again matched its own recorded byte length
+  and actual MD5. The original client key/IV were used only in a local
+  in-memory Python `cryptography` AES-256-CBC trial, followed by zlib
+  decompression. No plaintext or secret keys are saved or published.
+- **6/6** encrypted story commands decrypted and zlib-inflated
+  successfully. **4/4** additional mismatched encrypted Master tables
+  also decrypted and inflated successfully.
+- Local bounds-checked FlatBuffers structure analysis found a coherent
+  root-table / first-field vector / nested-table layout for **all 10/10**
+  decompressed payloads. This is a structural probe, not a generated
+  FlatBuffers schema or native original-client rendering acceptance.
+
+| Owner-file suffix | Inflated bytes | Structurally valid nested row count |
+| --- | ---: | ---: |
+| `novelCommand751040548.enc` | 28,528 | 123 |
+| `novelCommand751040550.enc` | 74,460 | 342 |
+| `novelCommand751040806.enc` | 23,116 | 90 |
+| `novelCommand751040815.enc` | 59,564 | 246 |
+| `novelCommand751041273.enc` | 28,528 | 123 |
+| `novelCommand751041275.enc` | 74,460 | 342 |
+| `adventureMission.enc` | 4,860 | 26 |
+| `downloadVoicePhase.enc` | 656 | 9 |
+| `lotteryWeightGroup.enc` | 2,560 | 90 |
+| `subscription.enc` | 8,284 | 2 |
+
+The zlib streams correctly completed, and any trailing encrypted block
+padding was ignored after the zlib end marker. Byte-level and
+FlatBuffers structural success makes random corruption or entirely
+different crypto for these ten source files **unlikely**, but it does
+NOT establish that their rows satisfy the later reference catalog or
+native game scripts.
+
+**Boundary remains non-negotiable:** All ten encrypted source files
+still have MD5s **different** from the required current/historical
+reference. They are NOT marked repaired or imported. The seven
+reference-exact phase manifests remain the only repaired subset
+(7/19); twelve mismatches remain. No AYN Thor installation, real
+full-profile import, story playback, combat or gacha acceptance is
+claimed.
+
+The existing `tools/inspect_story_command_compat.cjs` now invokes
+`tools/inspect_story_flatbuffer_shape.cjs` to report **only** a strict
+bounded generic nested-table root shape and row count. Synthetic
+regressions cover invalid roots, excessive row counts, invalid table
+offsets/vtables, and the read-only verdict. This is reusable
+verification code, and does not embed client keys, owner ciphertext
+or plaintext.
+
+**Next investigation:** recover or compare the six reference-exact
+content versions, examine original novel-command field semantics,
+and perform an isolated client-side acceptance test. Do not waive
+reference MD5 merely on structural decode success.
