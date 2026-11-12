@@ -37,6 +37,24 @@ class OriginalIndirectCallTests(unittest.TestCase):
         self.assertEqual(result["verified_numeric_opcode_handler_mappings"], 0)
         self.assertFalse(result["original_import_authorized"])
 
+    def test_virtual_call_two_load_shape_still_no_verified_vtable(self):
+        binary = fixture()
+        struct.pack_into("<I", binary, 0x120, 0xf9400008)  # LDR X8,[X0]
+        struct.pack_into("<I", binary, 0x124, 0xf9400908)  # LDR X8,[X8,#16]
+        struct.pack_into("<I", binary, 0x128, 0xd63f0100)  # BLR X8
+        frames, exact = fake_report(binary)
+        result = indirect.inspect_original_indirect_calls(binary, frames, exact)
+        self.assertEqual(result["original_blr_call_sites"], 1)
+        self.assertEqual(result["two_load_virtual_call_shaped_sites"], 1)
+        site = result["sites"][0]
+        self.assertEqual(site["earlier_register_writer_kind"], "LOAD_POINTER_FROM_REGISTER")
+        self.assertEqual(site["earlier_register_writer_source"], 0)
+        self.assertEqual(site["earlier_register_writer_byte_offset"], 0)
+        self.assertTrue(site["two_pointer_loads_syntactically_adjacent_in_register"])
+        self.assertFalse(site["proven_virtual_dispatch"])
+        self.assertEqual(result["verified_vtable_targets"], 0)
+        self.assertEqual(result["verified_numeric_opcode_handler_mappings"], 0)
+
     def test_register_copy_is_classified_without_assuming_dataflow(self):
         word = 0xaa0003e0 | (8 << 16) | 16  # MOV X16,X8
         hint = indirect._register_writer(word, 0x1000)
