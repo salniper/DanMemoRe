@@ -955,3 +955,59 @@ ciphertexts, without weakening the import MD5 gate.
 
 **Do not merge** PR #1; no original archive/AYN Thor mutation, real legacy
 import, or native story/battle/gacha acceptance occurred.
+
+
+## Six-owner-cipher private native compatibility path (2026-11-12)
+
+The owner's **actual uploaded** \`danmemore_19_payload.json\` and corresponding
+\`danmemore_legacy_audit 3(1).json\` were rechecked locally with no edit:
+all **six** \`novelCommand*.enc\` byte lengths, actual MD5s and audit sizes
+matched exactly (76,912 encrypted bytes total). All six lengths are positive
+multiples of 16; all six still fail the independent reference MD5.
+This verifies preservation-state integrity only, **not decryption**.
+
+A new local-only tool \`tools/verify_story_payload_with_xapk.py\` can now
+perform the first candidate-crypto probe on those exact six assets **when
+the untouched independently pinned EU 15.1.0 ARM64 XAPK is colocated with
+the owner's JSON files in a private analysis environment**.
+
+It:
+1. Checks the original XAPK SHA-1 and native \`libapp.so\` SHA-256 using
+   \`verify_pristine_arm64_xapk.py\`.
+2. Strictly revalidates the full 19-issue audit and the six Base64 ciphertext
+   blobs against the owner's already-recorded sizes and actual MD5s.
+3. Stages only the six ciphertexts and pinned native ELF in a private
+   self-deleting temporary directory; never overwrites the owner contents.
+4. Calls the existing \`inspect_story_command_compat.cjs\` with the original
+   native image **only to try the previously recovered Master AES-CBC/zlib
+   decoder**. No key, plaintext, original ELF or ciphertext leaves that
+   environment. Only per-file SHA/hash and decode success/failure metadata
+   are emitted.
+5. Refuses unexpected output, failed probes, incomplete groups, unknown
+   binary hashes or any attempt to authorize legacy content import.
+
+Example, run from a private checkout only after placing **both** sources
+on the same trusted analysis host (paths are placeholders, not uploaded
+game files in Git):
+
+\`\`\`bash
+python3 tools/verify_story_payload_with_xapk.py \
+  --xapk /private/original-15.1.0-EU-arm64.xapk \
+  --audit "/private/danmemore_legacy_audit 3(1).json" \
+  --payload /private/danmemore_19_payload.json
+\`\`\`
+
+**Important status:** This pass checked the actual six owner-uploaded
+ciphertexts against their audit **locally**, and separately
+authenticated/scanned the original ARM64 XAPK **on isolated GitHub runners**.
+The full combined original-native-plus-user-six-file decode check has
+**NOT YET RUN**: the owner's private ciphertexts were never sent to public
+GitHub CI, and the ephemeral verified original XAPK was not present
+locally at the same time. The new tool's integration is synthetic-tested,
+not an actual six-file decrypt result.
+
+An AES-CBC/zlib **failure** may mean different story crypto or source
+version, not necessarily corruption. An inflate **success** indicates
+only compression compatibility; it is NOT a native novel-schema/loader
+proof, much less reference MD5 authentication. All 12 residual mismatches
+remain blocked, PR stays Draft, and no AYN Thor gameplay has been tested.
