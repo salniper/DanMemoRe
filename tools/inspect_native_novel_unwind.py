@@ -158,7 +158,9 @@ def _cie_encoding(blob, offset, sec):
                 raise ValueError("truncated CIE personality")
             personality = blob[at]
             at += 1
-            _, at = _encoded(blob, at, personality, {
+            # An indirect personality encoding still has the same encoded
+            # field width. Never dereference the personality pointer.
+            _, at = _encoded(blob, at, personality & 0x7f, {
                 "addr":sec["addr"], "offset":sec["offset"]
             })
         elif character == "S":
