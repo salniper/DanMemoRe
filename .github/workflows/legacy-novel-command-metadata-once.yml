@@ -78,6 +78,15 @@ jobs:
                   handler_files[name]+=count
           print("NOVEL_HANDLER_CLASS_NAMES="+json.dumps(sorted(handler_files),ensure_ascii=True))
           print("NOVEL_HANDLER_CLASS_COUNT="+str(len(handler_files)))
+          factory_related=[
+              item for item in matches.keys()
+              if ('NovelCommandExecuter' in item or 'NovelCommandParam::' in item
+                  or ('NovelCommand' in item and ('::create' in item or '::make' in item)))
+              and not item.startswith('/tmp/')
+          ]
+          print("NOVEL_FACTORY_RELATED_FUNCTION_NAME_COUNT="+str(len(factory_related)))
+          print("NOVEL_FACTORY_RELATED_FUNCTION_NAMES="+json.dumps(
+              sorted(factory_related)[:45],ensure_ascii=True))
           PY
           # Only a RSA-3072 OAEP/SHA256 sealed config is logged, not clear keys.
           node -e 'const {nativeMasterConfig}=require("./tools/decode_master_data.cjs");const c=nativeMasterConfig(process.argv[1]);process.stdout.write(JSON.stringify({aes:c.key.toString("hex"),iv:c.iv.toString("hex"),numeric:c.numericKey.toString("hex")}));' "$tmpdir/original.so" | \
