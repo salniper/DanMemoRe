@@ -87,6 +87,8 @@ jobs:
                 str(report["code_site_candidates"]))
           print("native_dispatch_opcode_mappings_verified=" +
                 str(report["numeric_opcode_to_handler_mappings_verified"]))
+          print("original_unwind_sections=" +
+                json.dumps(report["original_unwind_section_evidence"],sort_keys=True))
           executor=report["original_executor_neighborhoods"]
           print("native_createNovel_source_anchored_sites=" +
                 str(executor["executor_site_count"]))
