@@ -98,6 +98,24 @@ jobs:
           print("original_unwind_fde_index_entries=" + str(unwind["fde_index_entries"]))
           print("original_executor_unwind_covered_anchors=" +
                 str(unwind["exact_fde_coverage_count"]))
+          exact_region=report["original_executor_cfi_region_code"]
+          print("original_executor_unique_fde_regions=" +
+                str(exact_region["distinct_verified_unwind_regions"]))
+          print("original_executor_cfi_opcode_handler_pairs=" +
+                str(exact_region["verified_numeric_opcode_handler_pairs"]))
+          for region in exact_region["regions"]:
+              print("original_executor_precise_region=" + json.dumps({
+                  "unwind_start_va": region["validated_unwind_start_va"],
+                  "unwind_end_va_exclusive": region["validated_unwind_end_va_exclusive"],
+                  "instruction_word_count": region["instruction_word_count"],
+                  "instruction_class_counts": region["instruction_class_counts"],
+                  "immediate_comparisons_up_to_256": region["immediate_comparisons_up_to_256"],
+                  "direct_call_count": region["direct_call_count"],
+                  "direct_call_sites": region["direct_call_sites"][:60],
+                  "indirect_sites": region["indirect_call_or_branch_sites"],
+                  "branches_within_region": region["branches_within_region"],
+                  "branches_outside_region": region["branches_outside_region"],
+              },sort_keys=True))
           for row in unwind["sites"]:
               print("original_executor_cfi_site=" + json.dumps(row,sort_keys=True))
           for site in executor.get("sites", [])[:8]:
