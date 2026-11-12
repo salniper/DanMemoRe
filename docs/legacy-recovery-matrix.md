@@ -808,3 +808,51 @@ environment before claiming format compatibility.
 **No contents import, native gameplay, or AYN Thor testing occurred.**
 There are still **12 original mismatches without reference authentication**;
 all strict import checks remain active, and the PR must remain Draft.
+
+
+## Authenticated four-site ARM64 control-flow neighborhoods (2026-11-12)
+
+[Real original-client bounded context run](https://github.com/salniper/DanMemoRe/actions/runs/43189563885)
+used the **same source archive SHA-1 and pristine native SHA-256** as the
+preceding evidence. No original source bytes, disassembly or private files
+were uploaded or included in Git.
+
+The new \`tools/inspect_native_novel_xref_context.py\` analyzes a bounded
+code window around each of the four previously reported ADR target-address
+candidates. It emits only instruction *categories and addresses*, never
+native code bytes, and requires the already authenticated original via
+\`tools/verify_pristine_arm64_xapk.py --scan --context\`.
+
+### Real observed context
+
+| ADR site file offset | Literal context | Nearby direct call/branch/return | Conventional frame marker within 2 KiB |
+| ---: | --- | --- | --- |
+| 54283152 | embedded inside longer printable string | none within ±192 B | not found |
+| 54069236 | embedded inside longer printable string | none within ±192 B | not found |
+| 54086404 | embedded inside longer printable string | none within ±192 B | not found |
+| 54231964 | embedded inside longer printable string | none within ±192 B | not found |
+
+No first return was found within the bounded forward 2 KiB at these
+sites. **These observations are not a comprehensive disassembly and do
+not prove that the sites are inert or unrelated.** Frame pointers may
+be omitted, external/indirect calls may be far from the scan window, and
+the ADR pattern might occur incidentally in executable-region data.
+
+**Correction to earlier wording:** the four results are strictly
+\`ADR\` immediate address *matches* for string substrings. They should
+**not** be described as four proven code-to-loader references, nor as
+an actual novel-command function/call chain. The larger string context
+and absence of nearby branch evidence make a false-positive or
+reflection/string-metadata explanation plausible. Further evidence
+must determine the actual consumers of \`NovelCommand\` or identify
+the file loader through other symbol/data-flow sources.
+
+[Full PR policy CI](https://github.com/salniper/DanMemoRe/actions/runs/43189563884):
+nine jobs passed, including new synthetic ARM64 context and input-gate
+tests. Those synthetic tests do not independently prove gameplay.
+
+The original client's \`divide_novel_command_enc\` literal still has
+zero direct string hits, **not** proof that the path or loader is absent.
+The six encrypted novel files have not been decrypted or authenticated
+to the source reference. **12 legacy mismatches remain blocked**. The
+launcher was not installed, imported, or run on the AYN Thor in this pass.
