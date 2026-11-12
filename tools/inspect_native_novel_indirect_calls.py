@@ -137,11 +137,35 @@ def inspect_original_indirect_calls(blob, frame_report, precise_report):
             if len(sites) >= MAX_SITES:
                 raise ValueError("too many original indirect BLR sites")
             hint = _find_linear_writer(blob, at, offset, reg)
+            # Syntactic two-load pattern only: LDR X8,[X8,#16]; BLR X8.
+            # Query the nearest earlier observed writer of the *same* X8,
+            # without claiming CFG reachability or identifying a vtable.
+            prior = None
+            two_load_shape = False
+            if (hint["nearest_writer_kind"] == "LOAD_POINTER_FROM_REGISTER"
+                    and hint["nearest_writer_source_register"] == reg
+                    and hint.get("nearest_writer_file_offset") is not None):
+                prior = _find_linear_writer(blob,
+                                            hint["nearest_writer_file_offset"],
+                                            offset, reg)
+                two_load_shape = (
+                    prior["nearest_writer_kind"] == "LOAD_POINTER_FROM_REGISTER"
+                    and prior["preceding_control_transfers_since_writer"] == 0
+                    and hint["preceding_control_transfers_since_writer"] == 0
+                )
             kindcounts[hint["nearest_writer_kind"]] += 1
             sites.append({
                 "call_instruction_va": first + at - offset,
                 "call_target_register": reg,
                 **hint,
+                "earlier_register_writer_kind":
+                    prior["nearest_writer_kind"] if prior else None,
+                "earlier_register_writer_source":
+                    prior.get("nearest_writer_source_register") if prior else None,
+                "earlier_register_writer_byte_offset":
+                    prior.get("nearest_writer_byte_offset") if prior else None,
+                "two_pointer_loads_syntactically_adjacent_in_register":
+                    two_load_shape,
                 "resolved_function_target_va": None,
                 "proven_virtual_dispatch": False,
                 "original_novel_handler_verified": False,
@@ -156,6 +180,8 @@ def inspect_original_indirect_calls(blob, frame_report, precise_report):
         "status": "ORIGINAL_CFI_BLR_REGISTER_LOAD_HINTS_NO_DISPATCH_PROOF",
         "original_blr_call_sites": len(sites),
         "call_target_nearest_writer_kinds": dict(kindcounts),
+        "two_load_virtual_call_shaped_sites": sum(
+            x["two_pointer_loads_syntactically_adjacent_in_register"] for x in sites),
         "sites": sites,
         "verified_vtable_targets": 0,
         "verified_numeric_opcode_handler_mappings": 0,
