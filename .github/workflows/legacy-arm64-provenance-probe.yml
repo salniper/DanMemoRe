@@ -103,6 +103,25 @@ jobs:
                 str(exact_region["distinct_verified_unwind_regions"]))
           print("original_executor_cfi_opcode_handler_pairs=" +
                 str(exact_region["verified_numeric_opcode_handler_pairs"]))
+          callees=report["original_executor_direct_callees"]
+          print("novel_executor_original_BL_sites="+str(callees["original_caller_direct_bl_sites"]))
+          print("novel_executor_unique_BL_targets="+str(callees["unique_direct_bl_targets"]))
+          print("novel_executor_BL_target_fde_statuses="+
+                json.dumps(callees["callee_fde_status_totals"],sort_keys=True))
+          print("novel_executor_verified_opcode_handler_links="+
+                str(callees["numeric_opcode_to_native_handler_proven"]))
+          for target in callees["callees"]:
+              print("novel_executor_original_BL_target="+json.dumps({
+                  "target_va":target["target_va"],
+                  "inbound_call_count":target["source_call_count"],
+                  "unwind_status":target["fde_status"],
+                  "fde_start":target["unwind_start_va"],
+                  "fde_end_exclusive":target["unwind_end_va_exclusive"],
+                  "is_fde_entry":target["target_is_fde_entry"],
+                  "novel_label_candidates_in_same_fde":
+                    target["novel_source_label_candidates_in_same_fde"],
+                  "label_candidate_samples":target["novel_source_label_samples"][:5],
+              },sort_keys=True))
           for region in exact_region["regions"]:
               print("original_executor_precise_region=" + json.dumps({
                   "unwind_start_va": region["validated_unwind_start_va"],
