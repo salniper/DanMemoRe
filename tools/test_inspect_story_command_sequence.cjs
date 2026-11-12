@@ -47,6 +47,8 @@ assert(report.scripts.every(x=>x.command_count===2&&x.contiguous_record_ids));
 assert.equal(report.scripts[0].distinct_opcode_count,2);
 assert.equal(report.scripts[0].opcode_histogram[19],1);
 assert.equal(report.scripts[0].opcode_histogram[11],1);
+assert.equal(report.scripts[0].opcode_parameter_presence[11].slot3,1);
+assert.equal(report.scripts[0].opcode_parameter_presence[19].slot9,1);
 assert.deepEqual(report.scripts[0].string_parameter_nonempty_rows,
   Object.fromEntries(Array.from({length:7},(_,i)=>['slot'+(i+3),2])));
 assert.equal(report.repeated_script_comparisons.length,2);
