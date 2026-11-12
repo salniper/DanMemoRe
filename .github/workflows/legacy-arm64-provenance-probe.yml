@@ -105,6 +105,8 @@ jobs:
                 json.dumps(indirect["call_target_nearest_writer_kinds"],sort_keys=True))
           print("original_executor_proven_vtable_targets="+
                 str(indirect["verified_vtable_targets"]))
+          print("original_executor_syntactic_two_pointer_load_chains="+
+                str(indirect["two_load_virtual_call_shaped_sites"]))
           print("original_executor_indirect_opcode_handler_links="+
                 str(indirect["verified_numeric_opcode_handler_mappings"]))
           for item in indirect["sites"]:
@@ -116,6 +118,10 @@ jobs:
                   "writer_source_register":item.get("nearest_writer_source_register"),
                   "writer_byte_offset":item.get("nearest_writer_byte_offset"),
                   "control_barriers":item["preceding_control_transfers_since_writer"],
+                  "earlier_writer_kind":item["earlier_register_writer_kind"],
+                  "earlier_writer_source":item["earlier_register_writer_source"],
+                  "earlier_writer_byte_offset":item["earlier_register_writer_byte_offset"],
+                  "two_load_syntactic_shape":item["two_pointer_loads_syntactically_adjacent_in_register"],
                   "reaching_definition_validated":False,
               },sort_keys=True))
           exact_region=report["original_executor_cfi_region_code"]
