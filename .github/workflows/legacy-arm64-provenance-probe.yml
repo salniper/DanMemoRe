@@ -110,6 +110,25 @@ jobs:
                 json.dumps(callees["callee_fde_status_totals"],sort_keys=True))
           print("novel_executor_verified_opcode_handler_links="+
                 str(callees["numeric_opcode_to_native_handler_proven"]))
+          second_hop=report["original_executor_direct_callee_code_shapes"]
+          print("original_novel_unique_callee_code_regions="+
+                str(second_hop["verified_callee_fde_regions"]))
+          print("original_novel_second_hop_verified_handler_maps="+
+                str(second_hop["numeric_opcode_handler_mappings_proven"]))
+          for region in second_hop["callee_regions"]:
+              print("original_novel_callee_code_shape="+json.dumps({
+                  "fde_start_va":region["fde_start_va"],
+                  "fde_end_va":region["fde_end_va_exclusive"],
+                  "instructions":region["instruction_word_count"],
+                  "instruction_counts":region["instruction_class_counts"],
+                  "immediate_comparisons":region["small_immediate_cmp_histogram"],
+                  "overlapping_story_opcode_constants":
+                    region["observed_story_opcode_values_also_present_as_cmp_immediates"],
+                  "distinct_second_hop_BL_targets":
+                    region["unique_second_hop_direct_call_targets"],
+                  "second_hop_BL_count":region["second_hop_direct_call_count"],
+                  "second_hop_sample":region["second_hop_direct_call_sample"][:12]
+              },sort_keys=True))
           for target in callees["callees"]:
               print("novel_executor_original_BL_target="+json.dumps({
                   "target_va":target["target_va"],
