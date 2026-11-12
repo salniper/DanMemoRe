@@ -158,6 +158,8 @@ def inspect_original_indirect_calls(blob, frame_report, precise_report):
                 "call_instruction_va": first + at - offset,
                 "call_target_register": reg,
                 **hint,
+                "earlier_register_writer_file_offset":
+                    prior.get("nearest_writer_file_offset") if prior else None,
                 "earlier_register_writer_kind":
                     prior["nearest_writer_kind"] if prior else None,
                 "earlier_register_writer_source":
