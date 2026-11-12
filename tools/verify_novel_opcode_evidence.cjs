@@ -45,6 +45,39 @@ function assertEvidence(e) {
   }
   if (total !== UNIQUE_ROWS || counts.size !== 25)
     throw new Error('Invalid native owner-script opcode totals');
+  // The four unique script files also have a pinned per-script distribution.
+  // This prevents an aggregate-equivalent yet reordered/altered script mix
+  // from being incorrectly attributed to the owner's six actual files.
+  const perScript=e.source_evidence.canonical_script_histograms;
+  if (!perScript || Object.keys(perScript).length !== CANONICAL_SCRIPTS.length)
+    throw Error('Missing canonical original script distribution');
+  const perCode = new Map(), perTotal = 0;
+  const perCounts = [123,342,90,246];
+  for (let i=0;i<CANONICAL_SCRIPTS.length;i++) {
+    const h=perScript[String(CANONICAL_SCRIPTS[i])];
+    if (!h || typeof h !== 'object' || Array.isArray(h))
+      throw Error('Invalid canonical original script histogram');
+    let scriptTotal=0;
+    for(const [codeText,num] of Object.entries(h)) {
+      const code=Number(codeText);
+      if (!Number.isSafeInteger(code) || String(code)!==codeText ||
+          !counts.has(code) || !Number.isSafeInteger(num) || num<=0)
+        throw Error('Invalid original script numeric histogram');
+      scriptTotal+=num;
+      perCode.set(code,(perCode.get(code)||0)+num);
+    }
+    if (scriptTotal!==perCounts[i])
+      throw Error('Invalid original script row count');
+    perTotal+=scriptTotal;
+  }
+  if (perTotal!==UNIQUE_ROWS || perCode.size!==counts.size ||
+      [...counts].some(([code,num])=>perCode.get(code)!==num))
+    throw Error('Owner script opcode distribution is internally inconsistent');
+  const repeats=e.source_evidence.repeat_pair_identical_command_rows;
+  if (!repeats ||
+      repeats['751041273']?.same_as!=='751040548' || repeats['751041273']?.rows!==123 ||
+      repeats['751041275']?.same_as!=='751040550' || repeats['751041275']?.rows!==342)
+    throw Error('Original repeated-script metadata is incomplete');
   const classes = e.original_native_handler_class_names;
   if (new Set(classes).size !== classes.length ||
       classes.some((name,i) => typeof name !== 'string' ||
@@ -76,6 +109,15 @@ function verifySixScriptStats(report, evidence) {
       differences.push('INVALID_SCRIPT_ID_OR_ORDER');
       continue;
     }
+    const canonicalId=String(i >= CANONICAL_SCRIPTS.length ?
+      (i===4 ? CANONICAL_SCRIPTS[0] : CANONICAL_SCRIPTS[1]) : ALL_SCRIPTS[i]);
+    const expectedPerScript=evidence.source_evidence.canonical_script_histograms[canonicalId];
+    const expectedScriptRows=i===0||i===4 ? 123 : i===1||i===5 ? 342 : i===2 ? 90 : 246;
+    if (script.command_count!==expectedScriptRows ||
+        Object.keys(script.opcode_histogram).length!==Object.keys(expectedPerScript).length ||
+        Object.entries(expectedPerScript).some(([key,count])=>
+          script.opcode_histogram[key]!==count))
+      differences.push('OWNER_SCRIPT_PER_FILE_OPCODE_COUNTS_CHANGED');
     if (i >= CANONICAL_SCRIPTS.length) continue;
     for (const [str,num] of Object.entries(script.opcode_histogram)) {
       const code = Number(str);
