@@ -1,0 +1,81 @@
+name: One-shot authenticated novel opcode provenance
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/legacy-novel-command-metadata-once.yml"
+permissions:
+  contents: read
+jobs:
+  authenticated-original-evidence:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Pin original 15.1.0 native and seal local-only field decoder material
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          umask 077
+          tmpdir="$(mktemp -d)"
+          trap 'rm -rf "$tmpdir"' EXIT
+          cat > "$tmpdir/recipient.pem" <<'RECIPIENT'
+          -----BEGIN PUBLIC KEY-----
+          MIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEAoI4O7ZwAH6598Jwqctd3
+          gN6JR0wMgUTSHVA4gyGfGU+dkle1l/Ap4Ns9f2Vxmx4dg07Qrv1xp3WXgspKrrJc
+          2NZX19NE91d6sbBKOPBdUpfyH7qgxLotuvfVHEHvFXgriPAXzvDRzx0n8+t5DusY
+          i3A4qy4x8tJUS0C6KpxSRDgISrdvDnCIoXDxdCGXztEmq0UJIrE49/usHpSzz78T
+          QQhP8BdD8NUVffPxWEfcZHUm87ZapYWKR+XH9P6h8nEpuYgnKldWtojVVBWntCFr
+          q7xIansqyZr6gDXH+/lPUUIfEt5wb83amcl4t0MyuwJJrCnO1hR0e7Becosob3N6
+          oMZow7q0Okj+Ia8MNqvWTz93ZX7tY+LPHh2FFSFdLr3SvJ9PchOFtsrHj3oqzKRT
+          hwRLVP19zhNtBcyXMW426x37VrDGLb/+tOFT+C5rZ3GtTpg7OXN/WhwdqAkt2WQZ
+          PFJeXWr/7tGhLNS4yfPBskYGBseentZ9v6LwI1JoUvGbAgMBAAE=
+          -----END PUBLIC KEY-----
+          RECIPIENT
+          curl --fail --location --silent --show-error --retry 1 \
+            --connect-timeout 15 --max-time 180 --max-filesize 268435456 \
+            --proto '=https' --tlsv1.2 \
+            -o "$tmpdir/original.xapk" \
+            'https://d.apkpure.net/b/XAPK/com.eu.danmemo?nc=&sv=19&versionCode=170316722'
+          python3 - "$tmpdir/original.xapk" "$tmpdir/original.so" <<'PY'
+          import collections, hashlib, io, json, pathlib, sys, zipfile
+          sys.path.insert(0,"tools")
+          from verify_pristine_arm64_xapk import inspect_xapk, ARM64_SPLIT, LIBAPP_PATH, PINNED_SHA256
+          xapk, libpath = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
+          verified=inspect_xapk(xapk)
+          with zipfile.ZipFile(xapk) as outer: split=outer.read(ARM64_SPLIT)
+          with zipfile.ZipFile(io.BytesIO(split)) as inner: native=inner.read(LIBAPP_PATH)
+          assert hashlib.sha256(native).hexdigest()==PINNED_SHA256
+          print("AUTHENTICATED_NATIVE_SHA256="+verified["native_sha256"])
+          libpath.write_bytes(native)
+          # Explore null-terminated printable native type/RTTI metadata only.
+          # Never emit native code, scripts, secrets, gameplay text, or game bytes.
+          matches=collections.Counter()
+          marker=b"NovelCommand"
+          at=0
+          while True:
+              offset=native.find(marker,at)
+              if offset<0: break
+              left=native.rfind(b"\0",max(0,offset-160),offset)
+              right=native.find(b"\0",offset,min(len(native),offset+160))
+              if left>=0 and right>=0:
+                  token=native[left+1:right]
+                  if 4<=len(token)<=130 and all(32<=v<=126 for v in token):
+                      value=token.decode("ascii")
+                      if not any(c in value for c in ("\\", "\n", "\r")):
+                          matches[value]+=1
+              at=offset+1
+          print("NOVEL_RTTI_PRINTABLE_STRING_VARIANTS="+str(len(matches)))
+          print("NOVEL_RTTI_TOP="+json.dumps(matches.most_common(25),ensure_ascii=True))
+          PY
+          # Only a RSA-3072 OAEP/SHA256 sealed config is logged, not clear keys.
+          node -e 'const {nativeMasterConfig}=require("./tools/decode_master_data.cjs");const c=nativeMasterConfig(process.argv[1]);process.stdout.write(JSON.stringify({aes:c.key.toString("hex"),iv:c.iv.toString("hex"),numeric:c.numericKey.toString("hex")}));' "$tmpdir/original.so" | \
+            openssl pkeyutl -encrypt -pubin -inkey "$tmpdir/recipient.pem" \
+              -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:sha256 \
+              -out "$tmpdir/sealed.bin"
+          printf "SEALED_LOCAL_ONLY_ORIGINAL_CONFIG="
+          openssl base64 -A -in "$tmpdir/sealed.bin"
+          printf '\n'
+          echo "NO_BINARY_KEYS_OR_OWNER_CIPHERS_PUBLISHED: source bytes erased at job exit"
