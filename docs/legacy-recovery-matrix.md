@@ -595,3 +595,45 @@ must never be treated as proof of loader absence.
 
 The new test's CI conclusion remains a separate verification requirement.
 No import guard, game content, Android install, or `main` branch was changed.
+
+
+## All seven phase manifests byte-exactly recovered (2026-11-12)
+
+Using the owner's previously uploaded `danmemore_19_payload.json` and
+`danmemore_legacy_audit 3(1).json`, all seven Phase-1 phase manifest
+mismatches are now recoverable to **the exact current-and-historical
+reference MD5** without bypassing validation. Before repair, all source
+byte lengths and actual MD5s were independently rechecked against the
+uploaded audit. The repair consists solely of all three known 32-character
+version-token occurrences, and (where needed) the one numeric `size`
+field; repaired byte length stays unchanged.
+
+The four new numeric values were found by bounded numeric MD5 search of
+the pinned template, **then independently reconstructed and verified**.
+The older `.3`, `.6`, `.7` repairs remain unchanged.
+
+| File suffix | Original `size` | Verified `size` | Reference MD5 | Corrected SHA-256 |
+| --- | ---: | ---: | --- | --- |
+| `.1` | 536818947 | 623213094 | `48301e64e3fba6508ba6033e4e7b2742` | `ec0e35a630e80cecdcdde75dd249ea753b42535b0cd3812556d72ee5ba9930f6` |
+| `.2` | 628755188 | 728637082 | `6dc83eeac2c38e1787e78bc8b02d305a` | `ac798e3544caa70311b854051931dd16319f6cfd1b90f2b3004b0bfb44e756d1` |
+| `.3` | 2911947083 | 2912187403 | `a7aeb999419e537e585f08eaaddb2128` | `5eac0e62ba84234a421e06ce6acd2f1e07bdfe3aaf2cb25880be5d8bca242a09` |
+| `.4` | 1065258112 | 1745645577 | `6fa0e9aaed2304b6f366fecc9cab72c2` | `b18989f02a2eac6ac5003db92dfd7ec1b396b635b8379e2e27245e6b70f121ee` |
+| `.6` | 28523720 | 28523720 | `978673603b2d29df0ef9b53447ba0bcd` | `72433426fc9c74f79535843974433a55b0c1b89152c0ff4cda95c69bb8c31ba0` |
+| `.7` | 173322256 | 173322256 | `3bc336eab43c1c16350aab4a9a0ee5f4` | `bf0385f55c6c1040951b32acf06062b543263509a10345608e2b07f75f662697` |
+| `.8` | 176585414 | 280990034 | `7eff0561c5239786ceaa7eb0fd08bd71` | `303f8d28afdab031e26c3f5f92660db917e24ed779ac7e85df2e33fc042a6966` |
+
+`tools/repair_verified_phase_manifests.py` now pins the seven input
+SHA-256s, output SHA-256s, exact reference MD5s, length and expected
+field transformations. Default is read-only. Explicit `--apply`
+writes **separate output copies**, never edits the originals.
+`tools/prepare_legacy_recovery_overlay.py` can now stage **40
+verified files**: 33 original-EU-APK assets + seven corrected manifests.
+No proprietary bytes were committed.
+
+**Remaining 12 mismatches**: six encrypted novel commands, four encrypted
+master catalogs (two have previously documented decode-source provenance
+but still mismatch reference MD5), `1/files/font/number.png`, and
+`3/files/ui_atlas/home_gacha/gacha_top_move_parts_text.json`.
+A partial overlay is still NOT importable or playable. The existing
+legacy checksum gate remains strict, PR #1 remains Draft, and no AYN
+Thor installation or game import has been performed.
