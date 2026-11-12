@@ -25,6 +25,8 @@ on:
       - "tools/test_verify_pristine_arm64_xapk.py"
       - "tools/audit_original_xapk_asset_candidates.py"
       - "tools/test_audit_original_xapk_asset_candidates.py"
+      - "tools/verify_story_payload_with_xapk.py"
+      - "tools/test_verify_story_payload_with_xapk.py"
       - "tools/inspect_native_novel_xref_context.py"
       - "tools/test_inspect_native_novel_xref_context.py"
       - "tools/inspect_native_novel_elf_sections.py"
@@ -117,6 +119,14 @@ jobs:
       - uses: actions/checkout@v4
       - name: Validate section and symbol provenance classifications
         run: python3 -m unittest discover -s tools -p 'test_inspect_native_novel_elf_sections.py' -v
+
+  six-owner-story-crypto-probe-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test private and fail-closed six-story staging without original bytes
+        run: python3 -m unittest discover -s tools -p 'test_verify_story_payload_with_xapk.py' -v
 
   original-xapk-candidate-tests:
     runs-on: ubuntu-24.04
