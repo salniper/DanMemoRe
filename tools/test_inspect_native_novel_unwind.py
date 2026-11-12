@@ -25,7 +25,7 @@ def fixture():
     sec(2,b".rodata",1,2,0x2000,0x200,0x100)
     sec(3,b".shstrtab",3,0,0,0x700,len(names))
     sec(4,b".eh_frame",1,2,0x3000,0x800,0x100)
-    sec(5,b".eh_frame_hdr",1,2,0x8000,0x900,0x100)
+    sec(5,b".eh_frame_hdr",1,2,0x4000,0x900,0x100)
     # AArch64 CIE version1 with zR, pcrel sdata4.
     struct.pack_into("<I",blob,0x800,16)
     struct.pack_into("<I",blob,0x804,0)
@@ -36,10 +36,10 @@ def fixture():
     struct.pack_into("<i",blob,0x81c,0x1000-0x301c)
     struct.pack_into("<i",blob,0x820,0x40)
     blob[0x900:0x904]=bytes([1,0x1b,0x03,0x3b])
-    struct.pack_into("<i",blob,0x904,0x3000-0x8004)
+    struct.pack_into("<i",blob,0x904,0x3000-0x4004)
     struct.pack_into("<I",blob,0x908,1)
-    struct.pack_into("<i",blob,0x90c,0x1000-0x8000)
-    struct.pack_into("<i",blob,0x910,0x3014-0x8000)
+    struct.pack_into("<i",blob,0x90c,0x1000-0x4000)
+    struct.pack_into("<i",blob,0x910,0x3014-0x4000)
     return blob
 
 
