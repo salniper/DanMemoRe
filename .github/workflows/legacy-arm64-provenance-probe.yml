@@ -98,6 +98,21 @@ jobs:
           print("original_unwind_fde_index_entries=" + str(unwind["fde_index_entries"]))
           print("original_executor_unwind_covered_anchors=" +
                 str(unwind["exact_fde_coverage_count"]))
+          objects=report["original_executor_object_register_origins"]
+          print("original_executor_object_origin_sites="+
+                str(objects["indirect_call_count"]))
+          print("original_executor_recognized_object_writers="+
+                str(objects["recognized_origin_writer_count"]))
+          print("original_executor_verified_object_pointers="+
+                str(objects["verified_object_pointer_count"]))
+          for item in objects["object_register_sources"]:
+              print("original_executor_object_register_origin="+json.dumps({
+                  "call_va":item["call_instruction_va"],
+                  "source_register":item["object_source_register"],
+                  "origin_status":item["origin_status"],
+                  "origin_writer":item["origin_writer"],
+                  "register_flow_proven":item["register_flow_proven"],
+              },sort_keys=True))
           indirect=report["original_executor_indirect_calls"]
           print("original_executor_indirect_BLR_sites="+
                 str(indirect["original_blr_call_sites"]))
