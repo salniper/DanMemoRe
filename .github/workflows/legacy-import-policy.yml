@@ -16,6 +16,8 @@ on:
       - "tools/test_prepare_legacy_recovery_overlay.py"
       - "tools/inspect_master_source_provenance.py"
       - "tools/inspect_story_command_compat.cjs"
+      - "tools/inspect_story_flatbuffer_shape.cjs"
+      - "tools/test_inspect_story_flatbuffer_shape.cjs"
       - "tools/test_inspect_story_command_compat.cjs"
       - "tools/inspect_native_novel_loader_markers.py"
       - "tools/test_inspect_native_novel_loader_markers.py"
@@ -78,7 +80,9 @@ jobs:
         with:
           node-version: "24"
       - name: Run synthetic fail-closed story command checks
-        run: node tools/test_inspect_story_command_compat.cjs
+        run: |
+          node tools/test_inspect_story_command_compat.cjs
+          node tools/test_inspect_story_flatbuffer_shape.cjs
 
   native-novel-marker-tests:
     runs-on: ubuntu-24.04
