@@ -1,0 +1,68 @@
+name: One-shot sealed original master decoder configuration
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/legacy-original-master-keywrap-once.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  verify-and-seal:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Authenticate pristine original then seal minimal AES/IV for private local testing
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          umask 077
+          tmpdir="$(mktemp -d)"
+          trap 'rm -rf "$tmpdir"' EXIT
+          cat > "$tmpdir/recipient.pem" <<'RECIPIENT'
+          -----BEGIN PUBLIC KEY-----
+          MIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEAvwjlEVQjcfyXjHA2jRpz
+          cuWDNUmk7ePixFrfRUGgBT4C5Vg7btY08xUd5NhJzzLZUHrKXKhnZkG1MdroXnY7
+          Q9IC67LDu9d45DOcwhzHD2uAJNXK1M1gAyuw4Hl0vjm/Hw9ONFbh9mm0YsLV096w
+          OlCqlXPkjtnLZfLDAz6Eo6bVmeG6pUO8ibn2vcixBHJvKcJvKmIhn4WnnV+l13ye
+          /1T1SXEO6IzYZfxpUcOp8/baZSxjxxmtT72YGa+ckWTPsDiGlVFVqZE33UGFZwWy
+          UdmpFPy0J7x3+Q54UXTCqK1a/c3cUmr1eTDVaF60edElo61H6zOk/FbGG+OwoJyj
+          P+jR6tC3yaC3k3giTi1BilegGY62nSoRKaJ+Plc8mMgsepJ3oizK/7XaDMDyrnVh
+          /NnVcMcrm7uxDAEEzQF+fMF2/Kdnpsjpz3YST45GyoICZFhi3KJQd9EJq/CK8NTC
+          2l47HuUjh1xwMol0YOUcpt/s9YDMpH1ZaPwFh24ODbeFAgMBAAE=
+          -----END PUBLIC KEY-----
+          RECIPIENT
+          curl --fail --location --silent --show-error --retry 1 \
+            --connect-timeout 15 --max-time 180 --max-filesize 268435456 \
+            --proto '=https' --tlsv1.2 \
+            -o "$tmpdir/original.xapk" \
+            'https://d.apkpure.net/b/XAPK/com.eu.danmemo?nc=&sv=19&versionCode=170316722'
+          python3 - "$tmpdir/original.xapk" "$tmpdir/original.so" <<'PY'
+          import hashlib, io, pathlib, sys, zipfile
+          sys.path.insert(0, "tools")
+          from verify_pristine_arm64_xapk import inspect_xapk, ARM64_SPLIT, LIBAPP_PATH, PINNED_SHA256
+          src, dest = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
+          verified = inspect_xapk(src)
+          with zipfile.ZipFile(src) as outer:
+              split = outer.read(ARM64_SPLIT)
+          with zipfile.ZipFile(io.BytesIO(split)) as inner:
+              native = inner.read(LIBAPP_PATH)
+          assert hashlib.sha256(native).hexdigest() == PINNED_SHA256
+          dest.write_bytes(native)
+          print("AUTHENTICATED_NATIVE_SHA256=" + verified["native_sha256"])
+          PY
+          # A single-shot 3072-bit RSA/OAEP envelope. Native keys appear only
+          # in the memory-only pipe, NEVER in logs, Git or workflow artifacts.
+          node -e 'const {nativeMasterConfig}=require("./tools/decode_master_data.cjs"); const c=nativeMasterConfig(process.argv[1]); process.stdout.write(JSON.stringify({aes256_key:c.key.toString("hex"),cbc_iv:c.iv.toString("hex")}));' "$tmpdir/original.so" | \
+            openssl pkeyutl -encrypt -pubin -inkey "$tmpdir/recipient.pem" \
+              -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:sha256 \
+              -out "$tmpdir/sealed.bin"
+          printf 'SEALED_ORIGINAL_AES_CONFIG_RSA_OAEP_SHA256='
+          openssl base64 -A -in "$tmpdir/sealed.bin"
+          printf '\n'
+          echo "SEALED_CONFIG_ONLY: No plaintext keys, proprietary client, story cipher, or decrypted content uploaded."
