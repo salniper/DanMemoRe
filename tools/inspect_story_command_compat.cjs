@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { nativeMasterConfig, decodeFile } = require('./decode_master_data.cjs');
+const { inspectRootVector } = require('./inspect_story_flatbuffer_shape.cjs');
 
 const IDS = ['751040548','751040550','751040806','751040815','751041273','751041275'];
 const PREFIX = '1/master/divide_novel_command_enc/';
@@ -59,6 +60,7 @@ function inspect(audit, contents, image) {
         row.decode_probe = 'AES_CBC_ZLIB_INFLATE_SUCCEEDED';
         row.plaintext_length = plain.length;
         row.plaintext_sha256 = sha256(plain); // no plaintext exported or logged
+        row.structure_probe = inspectRootVector(plain);
       } catch (_) {
         row.decode_probe = 'AES_CBC_ZLIB_INFLATE_FAILED';
       }
@@ -67,7 +69,7 @@ function inspect(audit, contents, image) {
   });
   if (seen.size !== IDS.length) throw Error('incomplete story command set');
   return { verdict: 'DO_NOT_IMPORT_UNVERIFIED_BYTES', file_count: results.length,
-    decoder_scope: 'Master AES-CBC/zlib candidate only; success is NOT story schema or runtime proof',
+    decoder_scope: 'Master AES-CBC/zlib and generic FlatBuffers root vector only; success is NOT original novel schema or runtime proof',
     results };
 }
 function main(args) {
