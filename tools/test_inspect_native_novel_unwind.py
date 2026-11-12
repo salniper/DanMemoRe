@@ -113,6 +113,35 @@ class OriginalUnwindTests(unittest.TestCase):
         self.assertEqual(info["exact_fde_coverage_count"],0)
         self.assertEqual(info["mapped_opcodes"],0)
 
+    def test_precise_fde_code_classification_no_handler_claim(self):
+        blob=fixture()
+        struct.pack_into("<I",blob,0x120,0x7100801f)  # CMP W0,#32
+        struct.pack_into("<I",blob,0x124,0x94000002)  # BL +8
+        struct.pack_into("<I",blob,0x128,0x54000040)  # B.EQ +8
+        struct.pack_into("<I",blob,0x12c,0xd63f0200)  # BLR X16
+        frame=m.find_executor_unwind_frames(blob,anchors(0x1010,0x103c))
+        result=m.summarize_verified_fde_instructions(blob,frame)
+        self.assertEqual(result["distinct_verified_unwind_regions"],1)
+        self.assertEqual(result["verified_numeric_opcode_handler_pairs"],0)
+        self.assertFalse(result["import_authorized"])
+        region=result["regions"][0]
+        self.assertEqual(region["instruction_word_count"],16)
+        self.assertEqual(region["immediate_comparisons_up_to_256"][32],1)
+        self.assertEqual(region["direct_call_count"],1)
+        self.assertEqual(region["instruction_class_counts"]["CALL_INDIRECT"],1)
+        self.assertEqual(region["branches_within_region"],1)
+        self.assertEqual(region["direct_call_sites"][0]["to_va"],0x102c)
+        self.assertNotIn("instructions",region)
+        self.assertNotIn("bytes",region)
+
+    def test_unverified_fde_cannot_supply_code_semantics(self):
+        blob=fixture()
+        struct.pack_into("<i",blob,0x820,0)
+        frame=m.find_executor_unwind_frames(blob,anchors(0x1010))
+        summary=m.summarize_verified_fde_instructions(blob,frame)
+        self.assertEqual(summary["distinct_verified_unwind_regions"],0)
+        self.assertEqual(summary["verified_numeric_opcode_handler_pairs"],0)
+
     def test_aarch64_source_binary_rejected_if_bad(self):
         blob=fixture()
         blob[18]=62
