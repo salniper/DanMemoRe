@@ -6,6 +6,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { nativeMasterConfig, decodeFile } = require('./decode_master_data.cjs');
 const { inspectRootVector } = require('./inspect_story_flatbuffer_shape.cjs');
+const { profileStoryFields } = require('./inspect_story_field_profile.cjs');
 
 const IDS = ['751040548','751040550','751040806','751040815','751041273','751041275'];
 const PREFIX = '1/master/divide_novel_command_enc/';
@@ -61,6 +62,15 @@ function inspect(audit, contents, image) {
         row.plaintext_length = plain.length;
         row.plaintext_sha256 = sha256(plain); // no plaintext exported or logged
         row.structure_probe = inspectRootVector(plain);
+        if (row.structure_probe.status === 'FLATBUFFERS_ROOT_VECTOR_NESTED_TABLES_CONSISTENT') {
+          try {
+            row.field_profile = profileStoryFields(plain, config.numericKey);
+          } catch (_) {
+            // A field-analysis failure does not invalidate a successful
+            // decrypt/inflate; it must also never authorize this import.
+            row.field_profile = { status: 'FIELD_PROFILE_REJECTED_NO_IMPORT' };
+          }
+        }
       } catch (_) {
         row.decode_probe = 'AES_CBC_ZLIB_INFLATE_FAILED';
       }
