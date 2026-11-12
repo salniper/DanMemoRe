@@ -70,6 +70,36 @@ jobs:
                   }, sort_keys=True))
           PY
 
+          # Independently SHA-pin the source, then search only ELF .text
+          # for references to the *start* of original novel source-path labels.
+          # Report function/class metadata and instruction offsets only.
+          python3 tools/probe_pristine_novel_dispatch.py \
+            --xapk "$candidate" > "$local_dir/novel_dispatch_seeds.json"
+
+          python3 - "$local_dir/novel_dispatch_seeds.json" <<'PY'
+          import json, sys, os
+          with open(sys.argv[1], encoding="utf-8") as source:
+              report = json.load(source)
+          print("novel_metadata_labels=" + str(report["original_source_labels_checked"]))
+          print("novel_metadata_executable_ref_targets=" +
+                str(report["code_referenced_original_labels"]))
+          print("novel_metadata_executable_ref_sites=" +
+                str(report["code_site_candidates"]))
+          print("native_dispatch_opcode_mappings_verified=" +
+                str(report["numeric_opcode_to_handler_mappings_verified"]))
+          for row in report["candidate_referenced_labels"][:30]:
+              print("native_novel_code_reference=" + json.dumps({
+                  "kind": row["kind"],
+                  "label": row["original_label"],
+                  "instruction_sites": row["instruction_sites"][:8],
+                  "sites_truncated": row["instruction_site_count"] > 8
+              }, sort_keys=True))
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as out:
+              out.write("Original novel ELF .text label-reference candidates: " +
+                        str(report["code_site_candidates"]) +
+                        ". No numeric opcode/handler mapping verified.\n")
+          PY
+
           python3 - "$local_dir/report.json" <<'PY'
           import json, sys, os
           with open(sys.argv[1], encoding="utf-8") as source:
