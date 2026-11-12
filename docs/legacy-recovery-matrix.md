@@ -1148,3 +1148,39 @@ MD5 despite genuine successful decode. The original seven
 phase-manifest corrections are the only 7/19 formally repaired
 mismatches; 12 remain import blockers. No original-game runtime or
 AYN Thor story scene has been accepted. PR stays Draft.
+
+
+## Original novel opcode dispatch inventory — 2026-11-12
+
+The earlier successful decode and ten-field FlatBuffers analysis have now
+been cross-checked with **fresh metadata from the same SHA-pinned original
+EU 15.1.0 native binary**. The original client retains **34 named
+\`NovelCommand*.cpp\` handler classes** plus
+\`NovelCommandExecuter::createNovel(...)\` and multiple
+\`NovelCommandParam\` conversion helpers.
+
+The owner's 6 preserved script files contain **1,266 decoded rows**;
+two pairs duplicate **465** rows after excluding script/record IDs, leaving
+**801** original commands in four unique sequences and **25** numeric
+command-code values. The complete per-script distributions and 34
+class names are recorded in
+[\`data/danmemore-novel-opcode-evidence.json\`](../data/danmemore-novel-opcode-evidence.json),
+with corresponding bounded source/logic notes in
+[\`docs/novel-command-dispatch-evidence.md\`](novel-command-dispatch-evidence.md).
+
+Source: [authenticated original native handler class names](https://github.com/salniper/DanMemoRe/actions/runs/43213233277)
+and [executor/parameter helper signatures](https://github.com/salniper/DanMemoRe/actions/runs/43213856579).
+These are genuine original native **class/function strings**, not a proven
+numeric-opcode-to-native-handler dispatch table. **No numeric opcode has
+been safely associated with a class yet.** Only real factory code flow
+or a controlled original-client runtime trace can justify such a map.
+
+The new \`tools/verify_novel_opcode_evidence.cjs\` is fail-closed:
+all 25 observed codes remain non-executable until dispatch evidence
+arrives. It checks all four per-script distributions and both repeated
+pairs against the private six-file decoder's metadata without emitting
+any encrypted/decrypted client bytes.
+
+Import status **unchanged**: 7/19 reference mismatches exact-repaired,
+12/19 still unresolved; no new AYN Thor import, original client
+playback, or full battle/gacha acceptance. This PR stays Draft.
