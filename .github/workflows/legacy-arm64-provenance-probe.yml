@@ -49,6 +49,21 @@ jobs:
           print("ORIGINAL_ARM64_VERIFIED")
           print("pristine_native_sha256=" + report["native_sha256"])
           print("novel_marker_literal_total=" + str(sum(row["literal_hits"] for row in scan["markers"])))
+          # Print only bounded code-location metadata; never original native bytes.
+          for row in scan["markers"]:
+              print("marker_count=" + row["marker"] + ":" + str(row["literal_hits"]))
+              for location in row["locations"]:
+                  refs = location.get("address_references")
+                  if not refs or refs["candidate_count"] == 0:
+                      continue
+                  print("literal_reference=" + json.dumps({
+                      "marker": row["marker"],
+                      "literal_file_offset": location["file_offset"],
+                      "literal_virtual_address": location["virtual_address"],
+                      "candidate_count": refs["candidate_count"],
+                      "candidates": refs["candidates"],
+                      "truncated": refs["truncated"],
+                  }, separators=(",", ":"), sort_keys=True))
           print("novel_marker_address_candidates_total=" + str(sum(
               entry["address_references"]["candidate_count"]
               for row in scan["markers"]
