@@ -224,3 +224,121 @@ def classify_direct_callee_code(blob, report):
             "comparisons, pointer dispatch and indirect calls require SSA/CFG."
         ),
     }
+
+
+MAX_SECOND_HOP_SITES = 1024
+MAX_SECOND_HOP_MATCHES = 120
+
+
+def find_second_hop_handler_source_candidates(blob, source_references, direct_report,
+                                              flow_report):
+    """One further BL edge, validated against source-linked FDE and ELF .text.
+
+    A handler .cpp provenance string inside a callee's FDE is *not* proof
+    of a constructor or opcode->handler mapping. These are leads only.
+    """
+    import struct
+    from inspect_native_novel_unwind import _va_to_file, MAX_FDE_RANGE
+    from inspect_native_novel_executor_flow import _decode_control
+    if (direct_report.get("status") != "ORIGINAL_BL_CALLEE_FDE_ASSOCIATIONS_ONLY"
+            or flow_report.get("status") != "ONE_HOP_ORIGINAL_FDE_CODE_SHAPES_ONLY"):
+        raise ValueError("second hop requires independently verified original caller/callee FDE")
+    sections, segments = parse_sections(blob), elf_segments(blob)
+    hdr = parse_hdr(blob, sections)
+    eh = _section(sections, ".eh_frame")
+    if hdr["eh_frame_pointer_va"] != eh["addr"]:
+        raise ValueError("original EH header does not agree with frame section")
+    firsthop_frames = {
+        (x["unwind_start_va"],x["unwind_end_va_exclusive"])
+        for x in direct_report["callees"]
+        if x["fde_status"] == "VALIDATED_EXECUTABLE_CALLEE_FDE"
+    }
+    # Original xrefs to an exact original class source-file path. NOT symbols.
+    labels = []
+    for row in source_references.get("labels", []):
+        if row["kind"] != "ORIGINAL_HANDLER_CPP_PATH":
+            continue
+        for ref in row.get("instruction_sites", []):
+            labels.append({
+                "handler_cpp_path":row["label"],
+                "source_site_va":ref["site_instruction_va"],
+                "reference_pattern":ref["pattern"],
+            })
+    cached = {}
+    results = []
+    total_bl = 0
+    for frame in flow_report["callee_regions"]:
+        start, end = frame["fde_start_va"], frame["fde_end_va_exclusive"]
+        if (start,end) not in firsthop_frames:
+            raise ValueError("unproven first-hop FDE region in second-hop input")
+        length = end - start
+        source_off = _va_to_file(segments, start)
+        sec = _unique_executable_section(sections, start)
+        if (source_off is None or sec is None or length < 4
+                or length > MAX_FDE_RANGE or length % 4
+                or end > sec["addr"] + sec["size"]):
+            raise ValueError("first-hop function not uniquely executable")
+        branches = []
+        for off in range(source_off, source_off + length, 4):
+            va = start + off - source_off
+            kind, target = _decode_control(struct.unpack_from("<I", blob, off)[0], va)
+            if kind == "CALL_DIRECT":
+                branches.append(target)
+        if len(branches) != frame["second_hop_direct_call_count"]:
+            raise ValueError("second-hop call count disagrees with validated source")
+        total_bl += len(branches)
+        if total_bl > MAX_SECOND_HOP_SITES:
+            raise ValueError("second-hop BL safety bound exceeded")
+        exact = []
+        target_unique = sorted(set(branches))
+        for target in target_unique:
+            if target not in cached:
+                if _unique_executable_section(sections, target) is None:
+                    cached[target] = ("NOT_EXECUTABLE", None, [])
+                else:
+                    state, coverage = _maybe_fde(blob, sections, segments, hdr, target)
+                    matching = []
+                    if coverage is not None:
+                        matching = [x for x in labels if
+                                    coverage["start_va"] <= x["source_site_va"]
+                                    < coverage["end_va_exclusive"]]
+                    cached[target] = (state, coverage, matching)
+            state, coverage, matching = cached[target]
+            if matching:
+                exact.append({
+                    "called_va":target,
+                    "same_fde_original_cpp_labels":matching[:MAX_LABEL_SAMPLES],
+                    "handler_source_label_candidates":len(matching),
+                    "source_label_samples_truncated":len(matching)>MAX_LABEL_SAMPLES,
+                    "callee_fde_start_va":coverage["start_va"],
+                    "callee_fde_end_va_exclusive":coverage["end_va_exclusive"],
+                    "callee_target_is_fde_entry":target==coverage["start_va"],
+                    "opcode_or_handler_constructor_verified":False,
+                })
+        results.append({
+            "firsthop_fde_start_va":start,
+            "firsthop_fde_end_va_exclusive":end,
+            "second_hop_bl_sites":len(branches),
+            "second_hop_distinct_targets":len(target_unique),
+            "target_functions_with_novel_handler_cpp_labels":len(exact),
+            "handler_source_candidates":exact[:MAX_SECOND_HOP_MATCHES],
+            "handler_candidates_truncated":len(exact)>MAX_SECOND_HOP_MATCHES,
+        })
+    state_counts = Counter(state for state,_,_ in cached.values())
+    return {
+        "status":"ORIGINAL_TWO_HOP_NATIVE_HANDLER_CPP_METADATA_ONLY",
+        "firsthop_fde_regions":len(results),
+        "total_second_hop_bl_sites":total_bl,
+        "distinct_second_hop_targets":len(cached),
+        "second_hop_target_fde_status_counts":dict(state_counts),
+        "candidate_callees_with_handler_source_cpp":sum(
+            row["target_functions_with_novel_handler_cpp_labels"] for row in results),
+        "firsthop_regions":results,
+        "numeric_opcode_to_native_handler_mappings_verified":0,
+        "original_import_authorized":False,
+        "limitations":(
+            "Same FDE as a C++ source-path xref does not identify the called "
+            "target as the class constructor. Does not prove original opcode "
+            "numeric dispatch, actual playback, or reference asset hashes."
+        ),
+    }
