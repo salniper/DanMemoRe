@@ -58,14 +58,15 @@ def sign_extend(value, bits):
 MAX_LITERAL_OCCURRENCES = 8192
 
 
-def find_references_multi(blob, segments, targets, limit=MAX_HITS):
+def find_references_multi(blob, segments, targets, limit=MAX_HITS, code_filter=None):
     """Scan executable segments ONCE for direct ADR / adjacent ADRP+ADD targets.
 
     Does not disassemble control flow, pointer-indirect references, GOT or
     register aliases. Report locations only; this is not a decryption proof.
     """
     references = {
-        target: {"candidate_count": 0, "candidates": [], "truncated": False}
+        target: {"candidate_count": 0, "candidates": [], "truncated": False,
+                 "excluded_noncode_count": 0}
         for target in targets
     }
     for segment in segments:
@@ -96,6 +97,9 @@ def find_references_multi(blob, segments, targets, limit=MAX_HITS):
                         kind = "ADRP_ADD"
             entry = references.get(target)
             if entry is None:
+                continue
+            if code_filter is not None and not code_filter(off):
+                entry["excluded_noncode_count"] += 1
                 continue
             entry["candidate_count"] += 1
             if len(entry["candidates"]) < limit:
@@ -135,7 +139,21 @@ def inspect(blob):
             start = offset + 1
         all_locations[marker] = offsets
 
-    references = find_references_multi(blob, segments, targets)
+    # PT_LOAD PF_X is not sufficient evidence of an instruction: original
+    # client .rodata is co-mapped in a PF_X segment. Respect SHF_EXECINSTR
+    # when verified section headers exist; otherwise retain weaker raw
+    # segment-only candidates marked UNVERIFIED.
+    from inspect_native_novel_elf_sections import parse_sections, containing_sections
+    sections = parse_sections(blob)
+    if sections:
+        def is_instruction(off):
+            meta = containing_sections(sections, off)
+            return meta["executable"] and not meta["ambiguous"]
+    else:
+        is_instruction = None
+    references = find_references_multi(
+        blob, segments, targets, code_filter=is_instruction
+    )
     result = []
     for marker, offsets in all_locations.items():
         # Prioritize referenced literals so a relevant reference beyond the
@@ -164,9 +182,13 @@ def inspect(blob):
     return {
         "status": "CANDIDATE_STATIC_REFERENCES_ONLY",
         "markers": result,
-        "scan_scope": "ALL_BOUNDED_LITERAL_OCCURRENCES_ONE_EXECUTABLE_PASS",
+        "scan_scope": "SHF_EXECINSTR_FILTERED" if sections else
+                      "PF_X_ONLY_UNVERIFIED_NO_SECTION_HEADERS",
+        "excluded_noncode_arithmetic_matches": sum(
+            r["excluded_noncode_count"] for r in references.values()
+        ),
         "limitations": (
-            "ADR/adjacent ADRP+ADD only; neither references nor missing references "
+            "Only section-executable ADR/adjacent ADRP+ADD candidates are retained when ELF sections exist; neither hits nor misses "
             "establish control flow, decryption, asset identity, or compatibility."
         ),
     }
