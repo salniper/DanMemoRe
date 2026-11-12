@@ -47,9 +47,10 @@ def one_member(archive: zipfile.ZipFile, exact_name: str,
 
 def inspect_xapk(path: Path, *, archive_sha1: str = PINNED_XAPK_SHA1,
                  library_sha256: str = PINNED_SHA256,
-                 scan: bool = False, context: bool = False) -> dict:
-    if context and not scan:
-        raise ValueError('context analysis requires --scan')
+                 scan: bool = False, context: bool = False,
+                 sections: bool = False) -> dict:
+    if (context or sections) and not scan:
+        raise ValueError('context/sections analysis requires --scan')
     if (path.is_symlink() or not path.is_file() or
             not 0 < path.stat().st_size <= MAX_XAPK_SIZE):
         raise ValueError("invalid, symlinked or oversized source XAPK")
@@ -90,6 +91,9 @@ def inspect_xapk(path: Path, *, archive_sha1: str = PINNED_XAPK_SHA1,
         if context:
             from inspect_native_novel_xref_context import inspect_context
             result["story_code_context"] = inspect_context(blob, scanned)
+        if sections:
+            from inspect_native_novel_elf_sections import inspect_sections
+            result["story_elf_sections"] = inspect_sections(blob, scanned)
         result["warning"] = (
             "Static literal references are NOT a proven loader, parser or decryption path; "
             "the twelve asset mismatches remain blocked."
@@ -105,9 +109,12 @@ def main() -> None:
                         help="also scan native ADR/ADRP+ADD story marker candidates")
     parser.add_argument("--context", action="store_true",
                         help="inspect bounded static control-flow metadata near story xrefs")
+    parser.add_argument("--sections", action="store_true",
+                        help="classify native code/literal sections and matching symbols")
     args = parser.parse_args()
     try:
-        report = inspect_xapk(args.xapk, scan=args.scan, context=args.context)
+        report = inspect_xapk(args.xapk, scan=args.scan, context=args.context,
+                              sections=args.sections)
     except (OSError, ValueError, zipfile.BadZipFile, RuntimeError) as exc:
         parser.error(str(exc))
     print(json.dumps(report, ensure_ascii=False, indent=2))
