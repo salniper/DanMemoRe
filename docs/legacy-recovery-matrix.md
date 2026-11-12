@@ -637,3 +637,67 @@ but still mismatch reference MD5), `1/files/font/number.png`, and
 A partial overlay is still NOT importable or playable. The existing
 legacy checksum gate remains strict, PR #1 remains Draft, and no AYN
 Thor installation or game import has been performed.
+
+
+## Remaining twelve: independent rehash and bounded structural analysis (2026-11-12)
+
+Re-examined the owner's **actual** `danmemore_19_payload.json` bytes
+against their prior `danmemore_legacy_audit 3(1).json`. This was a
+local read-only analysis, **not** a rerun of the Android runtime.
+
+- **12/12 actual MD5s and sizes** still match the owner's recorded
+  audit, and **0/12** match the independently pinned current/historical
+  reference MD5. The twelve source files sum to 102,400 bytes.
+- `1/files/font/number.png`: 7,381 bytes; valid PNG chunk CRC and
+  full pixel decode, 109 x 179, 8-bit grayscale+alpha (`LA`).
+  The source includes 2023-04-17 ancillary timestamp/EXIF metadata.
+  Without original reference pixels/bytes there is **no defensible
+  byte-exact image correction**.
+- `3/files/ui_atlas/home_gacha/gacha_top_move_parts_text.json`:
+  4,267 bytes; valid UTF-8 JSON with CRLF line endings and a
+  `root` Node containing 13 Sprite children, distinct tags 1–13
+  and local image labels `1.png` through `13.png`.
+  Syntax/structure alone does not confirm image availability,
+  rendering, version compatibility, or reference byte identity.
+- **10 encrypted files**: all sizes are positive multiples of 16
+  bytes and every 16-byte block is unique *within its source file*;
+  measured byte entropies are ~7.55–7.99 bits/byte.
+  None of this authenticates ciphertext, identifies a key/IV, or
+  proves successful novel command parsing.
+- The two previously sourced master entries
+  `lotteryWeightGroup.enc` and `subscription.enc` retain their
+  upstream decoded-source SHA-256 provenance, but **still remain
+  strict reference-MD5 blockers**.
+
+New `tools/verify_remaining_legacy_candidates.py` checks all
+twelve **without writing files**, against the exact historical/current
+reference MD5 + size in the owner's audit. It accepts either the
+existing owner-supplied 19-file Base64 JSON (for local comparison),
+or a *separately acquired* candidate `contents` directory. It labels
+each candidate as `REFERENCE_EXACT`,
+`SAME_AS_UNVERIFIED_BACKUP`, `OTHER_UNVERIFIED`,
+`WRONG_SIZE`, or `ABSENT`. It rejects changed audit structure,
+unknown 19-file mismatch sets, path symlinks, duplicate payload
+entries, bad Base64 and overlarge inputs. Metadata-only output
+never publishes candidate bytes, decrypts archives or changes the
+importer's strict gate.
+
+Example (no device operation needed if the already uploaded payload
+and audit are on the analyst's local research computer):
+
+```bash
+python3 tools/verify_remaining_legacy_candidates.py \
+  --audit "/path/to/danmemore_legacy_audit.json" \
+  --payload "/path/to/danmemore_19_payload.json"
+
+# Later, if a distinct authentic EU game cache is discovered:
+python3 tools/verify_remaining_legacy_candidates.py \
+  --audit "/path/to/danmemore_legacy_audit.json" \
+  --candidates "/path/to/alternate/contents"
+```
+
+**Evidence gate remains unchanged: 7/19 byte-exact corrected, 12/19
+still not reference authenticated.** A mirrored copy of the owner's
+same preservation collection is not an independent historical capture.
+Neither the inspected original bytes nor their decoded data were
+committed. Keep PR #1 Draft; **do not merge or claim the ZIP can import**.
