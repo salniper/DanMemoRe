@@ -159,3 +159,75 @@ verified constructor target** before filling any
 \`verified_native_handler\`. The mapping stays **0/25**; no new asset
 has matched required reference MD5 and no scene has run on AYN Thor.
 This is reverse engineering evidence, **not** an import waiver.
+
+
+## 6. Exact original unwind-covered \`createNovel\` code interval (2026-11-12)
+
+This iteration independently parsed the original **ELF .eh_frame_hdr
+binary-search table (167,411 FDE entries)** and corresponding **.eh_frame
+CIE+FDE records**, with no external disassembler or third-party Python
+dependencies. Source archive SHA-1 and pristine EU 15.1.0 ARM64 native
+SHA-256 were reverified. **All six** .text source-label instruction
+anchors in section 5 fall inside **one and the same CIE/FDE-validated
+code coverage range**:
+
+- ELF virtual start **\`0x1FDE8D0\`** (decimal 33417424)
+- Exclusive end **\`0x1FDEE60\`** (decimal 33418848)
+- FDE-covered instruction length **1,424 bytes / 356 AArch64 words**
+- FDE virtual address **61321312**; source ARM64 FDE encoding **0x1b**
+- [Real original verified FDE evidence](https://github.com/salniper/DanMemoRe/actions/runs/43222352197)
+
+A CFI range is **actual original unwind metadata**, rather than an
+arbitrary +/-4 KiB neighborhood. It is still *not*, by itself, an
+independent C++ symbol that unambiguously proves the semantic
+\`createNovel\` function's name and identity.
+
+### Instruction classifications ONLY inside that one original range
+
+A second authentic original run scanned the exact 1,424-byte region,
+never the overlapping broad windows:
+
+| Instruction category | Observed instructions |
+| --- | ---: |
+| Direct BL calls | **33** |
+| Indirect BLR calls | **7** |
+| Branches (direct, conditional, compare-zero, bit-test) | **60** |
+| Conditional branches | 6 |
+| Compare-zero branches | 31 |
+| Bit-test branches | 8 |
+| Unconditional direct branches | 15 |
+| Return instructions | 1 |
+| \`CMP\` immediate in the supported decode pattern | **0** |
+
+All 60 decoded branch targets in this region fall inside this FDE
+range. No directly classifiable small-integer CMP immediates were found
+within the exact range; other methods of numeric dispatch (register
+comparison, bit masking, computed jump, another factory, indirect call
+chain) remain possible and are not covered by this conclusion.
+The analyzer recorded raw *addresses, categories and counts only*;
+original binary words, user story data, decrypted text and crypto keys
+were not emitted or committed.
+
+[Actual precise-region instruction metadata](https://github.com/salniper/DanMemoRe/actions/runs/43222975985).
+
+This changes the working hypothesis: **do not assume
+\`NovelCommandExecuter::createNovel\` is the numeric opcode factory**.
+A region with 33 external calls but no immediate equality comparisons
+could be a scene setup routine. Those calls require def-use and
+target/function ownership analysis before interpreting them as
+construction or command dispatch.
+
+Added source-verified and fail-closed pure Python tools:
+\`tools/inspect_native_novel_unwind.py\`, including
+\`summarize_verified_fde_instructions\`, the original-XAPK wrapper,
+and synthetic CIE/FDE corruption, exact-boundary and instruction-class
+regression tests. Original importer reference-MD5 enforcement remains
+unchanged, and **0 of 25 opcode-to-handler mappings are accepted**.
+Seven of the nineteen original archive mismatches have exact repairs;
+the remaining twelve continue to block full import.
+
+**Next target:** explore actual indirect call destinations and search
+the native class-construction factory independently of source-string
+proximity, linking a specific decoded slot-2 opcode to the construction
+of a particular \`NovelCommand*\` command object before implementing
+any playback behavior.
