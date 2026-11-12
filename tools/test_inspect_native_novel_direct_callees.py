@@ -60,6 +60,7 @@ class OriginalDirectCalleeTests(unittest.TestCase):
         self.assertEqual(target["target_va"], 0x1080)
         self.assertEqual(target["source_call_sites"], [0x1024])
         self.assertEqual(target["fde_status"], "VALIDATED_EXECUTABLE_CALLEE_FDE")
+        self.assertEqual(target["target_executable_section"], ".text")
         self.assertTrue(target["target_is_fde_entry"])
         self.assertEqual(target["unwind_start_va"], 0x1080)
         self.assertEqual(target["unwind_end_va_exclusive"], 0x10b0)
@@ -82,6 +83,7 @@ class OriginalDirectCalleeTests(unittest.TestCase):
         result = callees.inspect_direct_callees(blob, source_report(), frames, precise)
         self.assertEqual(result["callees"][0]["fde_status"],
                          "TARGET_NOT_EXECUTABLE_ELF_SECTION")
+        self.assertIsNone(result["callees"][0]["target_executable_section"])
         self.assertIsNone(result["callees"][0]["unwind_start_va"])
 
     def test_executable_target_outside_fde_remains_unmapped(self):
