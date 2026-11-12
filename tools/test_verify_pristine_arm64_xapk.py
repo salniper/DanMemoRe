@@ -92,6 +92,31 @@ class PristineArm64XapkTests(unittest.TestCase):
                                     library_sha256="0" * 64, scan=True, context=True)
             tracer.assert_not_called()
 
+    def test_elf_section_audit_requires_explicit_scan(self):
+        with self.assertRaisesRegex(ValueError, "requires --scan"):
+            self.check(sections=True)
+
+    def test_elf_sections_only_after_pinned_hashes(self):
+        from unittest.mock import patch
+        import inspect_native_novel_elf_sections as elf
+        report_scan = {"markers": [], "status": "fake"}
+        with patch.object(source, "inspect", return_value=report_scan):
+            with patch.object(elf, "inspect_sections",
+                              return_value={"status": "synthetic sections"}) as audit:
+                result = self.check(scan=True, sections=True)
+        audit.assert_called_once_with(self.library, report_scan)
+        self.assertEqual(result["story_elf_sections"]["status"], "synthetic sections")
+        self.assertFalse(result["import_authorized"])
+
+    def test_modified_native_never_reaches_section_audit(self):
+        from unittest.mock import patch
+        import inspect_native_novel_elf_sections as elf
+        with patch.object(elf, "inspect_sections") as audit:
+            with self.assertRaisesRegex(ValueError, "libapp.so SHA-256"):
+                source.inspect_xapk(self.path, archive_sha1=self.archive_hash,
+                                    library_sha256="0" * 64, scan=True, sections=True)
+            audit.assert_not_called()
+
     def test_wrong_archive_fingerprint_rejected(self):
         with self.assertRaisesRegex(ValueError, "XAPK fingerprint mismatch"):
             source.inspect_xapk(self.path, archive_sha1="0" * 40,
