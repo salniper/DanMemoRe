@@ -746,3 +746,65 @@ python3 tools/verify_pristine_arm64_xapk.py \
 The output would show literal address references, **not** an authenticated
 novel-command decryptor, parser, or six-file compatibility proof. No files
 among the twelve remaining mismatches are newly accepted. The PR stays Draft.
+
+
+## First authentic 15.1.0 ARM64 scan and exhaustive direct-xref correction (2026-11-12)
+
+The isolated GitHub Actions runner fetched the EU 15.1.0 ARM64 XAPK
+and authenticated its archive SHA-1 and the nested untouched
+\`lib/arm64-v8a/libapp.so\` SHA-256 against the independent pinned
+\`e49a8cc7991f8946365a28aebad605ce566b034826dd4b34a982ab18b38303b3\`.
+**Real original-client source evidence has therefore been obtained**;
+the binary was inspected in a temporary runner directory and deleted
+without uploading it to the repository.
+
+- [First authenticated source and literal scan](https://github.com/salniper/DanMemoRe/actions/runs/43186364344):
+  502 literal occurrences reported. The older analyzer inspected at most
+  40 locations for each marker and initially found only **one** direct
+  ADR/ADRP+ADD candidate. That count was incomplete and is superseded.
+- [Complete bounded single-pass original-ELF scan](https://github.com/salniper/DanMemoRe/actions/runs/43187346224):
+  all 502 literal occurrences were indexed, with **four** direct
+  ADR/ADRP+ADD instruction/address candidates.
+- The rewritten analyzer inspects all bounded marker occurrences
+  (limit 8,192 total per marker, failing closed above that limit) and
+  scans executable PT_LOAD segments **once**. The bounded output now
+  prioritizes references instead of dropping matches past the first
+  40 literal locations. New synthetic regression covers a reference
+  to the 41st same-name literal.
+- [Regression workflow](https://github.com/salniper/DanMemoRe/actions/runs/43187346227)
+  covers the optimized scanner and never downloads client bytes.
+
+### Actual native string and reference counts
+
+| Source literal | String occurrences | Direct static reference candidates |
+| --- | ---: | ---: |
+| \`divide_novel_command_enc\` | 0 | 0 |
+| \`novelCommand\` | 1 | 0 |
+| \`NovelCommand\` | 499 | 4 |
+| \`novel_command\` | 2 | 0 |
+
+The four reported candidates, from the exact original ARM64 binary,
+are all direct **ADR** references to \`NovelCommand\` string literals.
+ELF file offsets equal virtual addresses for these specific mappings:
+
+| ADR instruction file/virtual offset (decimal) | Literal file/virtual offset (decimal) |
+| ---: | ---: |
+| 54283152 | 54965593 |
+| 54069236 | 54980219 |
+| 54086404 | 54997387 |
+| 54231964 | 55013931 |
+
+The absence of the literal \`divide_novel_command_enc\` is a valid
+negative **literal-search** result, **not** proof the loader is absent.
+Paths can be constructed dynamically or reached indirectly. Four ADR
+references to strings are **not** a verified decryption routine,
+load path, engine invocation, control-flow proof, or validation of six
+encrypted novelCommand assets. GOT/indirect references and other ARM64
+addressing idioms remain outside scope. Next research: correlate these
+four instruction sites with bounded disassembly, nearby functions and
+actual file-loading behavior on a disposable original-client test
+environment before claiming format compatibility.
+
+**No contents import, native gameplay, or AYN Thor testing occurred.**
+There are still **12 original mismatches without reference authentication**;
+all strict import checks remain active, and the PR must remain Draft.
