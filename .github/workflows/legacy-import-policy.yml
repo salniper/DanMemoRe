@@ -34,6 +34,8 @@ on:
       - "tools/test_inspect_native_novel_dispatch_seeds.py"
       - "tools/inspect_native_novel_executor_flow.py"
       - "tools/test_inspect_native_novel_executor_flow.py"
+      - "tools/inspect_native_novel_unwind.py"
+      - "tools/test_inspect_native_novel_unwind.py"
       - "tools/probe_pristine_novel_dispatch.py"
       - "tools/verify_pristine_arm64_xapk.py"
       - "tools/test_verify_pristine_arm64_xapk.py"
@@ -118,6 +120,7 @@ jobs:
           python3 -m unittest discover -s tools -p 'test_inspect_elf_novel_xrefs.py' -v
           python3 -m unittest discover -s tools -p 'test_inspect_native_novel_dispatch_seeds.py' -v
           python3 -m unittest discover -s tools -p 'test_inspect_native_novel_executor_flow.py' -v
+          python3 -m unittest discover -s tools -p 'test_inspect_native_novel_unwind.py' -v
 
   pristine-arm64-source-tests:
     runs-on: ubuntu-24.04
