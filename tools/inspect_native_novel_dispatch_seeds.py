@@ -127,10 +127,8 @@ def scan_verified_code_references(blob, sections, labels):
                 target = page + (imm12 << shift)
                 for idx in target_index.get(target, ()):
                     _emit_reference(events, idx, off, pc, "ADRP_ADD_CANDIDATE", gap)
-            # Ignore stale ADRP values beyond the bounded lookback.
-            for reg, (_, site) in tuple(last_adrp.items()):
-                if off - site >= 4 * ADRP_LOOKBACK_INSTRUCTIONS:
-                    del last_adrp[reg]
+            # Stale candidates are ignored by the gap check above; the
+            # register map has at most 32 entries and needs no per-word sweep.
     report = []
     for row in sorted(labels.values(), key=lambda item: item["string_file_offset"]):
         hits = events.get(row["string_file_offset"], [])
