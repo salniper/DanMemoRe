@@ -30,6 +30,9 @@ on:
       - "tools/test_inspect_native_novel_loader_markers.py"
       - "tools/inspect_elf_novel_xrefs.py"
       - "tools/test_inspect_elf_novel_xrefs.py"
+      - "tools/inspect_native_novel_dispatch_seeds.py"
+      - "tools/test_inspect_native_novel_dispatch_seeds.py"
+      - "tools/probe_pristine_novel_dispatch.py"
       - "tools/verify_pristine_arm64_xapk.py"
       - "tools/test_verify_pristine_arm64_xapk.py"
       - "tools/audit_original_xapk_asset_candidates.py"
@@ -109,7 +112,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Verify synthetic ELF segment and AArch64 references
-        run: python3 -m unittest discover -s tools -p 'test_inspect_elf_novel_xrefs.py' -v
+        run: |
+          python3 -m unittest discover -s tools -p 'test_inspect_elf_novel_xrefs.py' -v
+          python3 -m unittest discover -s tools -p 'test_inspect_native_novel_dispatch_seeds.py' -v
 
   pristine-arm64-source-tests:
     runs-on: ubuntu-24.04
