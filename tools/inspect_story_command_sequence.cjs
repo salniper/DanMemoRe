@@ -1,7 +1,6 @@
 'use strict';
 // Original novelCommand slot-shape evidence only. This does not execute scripts,
 // expose dialogue, bypass reference MD5, or claim publisher opcode semantics.
-const { createHash } = require('node:crypto');
 const { decodeTable, field, rows } = require('./decode_master_data.cjs');
 const { profileStoryFields } = require('./inspect_story_field_profile.cjs');
 
@@ -36,6 +35,7 @@ function analyzeOne(plain, numericKey, expectedId) {
   if (decoded.length !== prof.row_count) throw Error('decoded row count mismatch');
   const counts={};
   const paramNonempty=Array(7).fill(0);
+  const paramPresenceByOpcode={};
   let first=null,previous=null;
   const commandSignatures=[];
   for (const item of decoded) {
@@ -49,11 +49,15 @@ function analyzeOne(plain, numericKey, expectedId) {
     else if (item.recordId!==previous+1) throw Error('noncontiguous story command order');
     previous=item.recordId;
     counts[item.opcode]=(counts[item.opcode]||0)+1;
+    if(!paramPresenceByOpcode[item.opcode]) paramPresenceByOpcode[item.opcode]=Array(7).fill(0);
     const params=Array.from({length:7},(_,i)=>item['param'+(i+3)]);
     for (let i=0;i<params.length;i++) {
       if (typeof params[i]!=='string' || params[i].length>MAX_STRLEN)
         throw Error('invalid or oversized decoded command parameter');
-      if (params[i])paramNonempty[i]++;
+      if (params[i]) {
+        paramNonempty[i]++;
+        paramPresenceByOpcode[item.opcode][i]++;
+      }
     }
     // Private compare-only representation; nothing based on it is written.
     commandSignatures.push([item.opcode,...params]);
@@ -68,6 +72,9 @@ function analyzeOne(plain, numericKey, expectedId) {
       contiguous_record_ids:true,
       opcode_histogram:counts,
       distinct_opcode_count:Object.keys(counts).length,
+      opcode_parameter_presence:Object.fromEntries(
+        Object.entries(paramPresenceByOpcode).map(([code,counts])=>[code,
+          Object.fromEntries(counts.map((n,i)=>['slot'+(i+3),n]))])),
       string_parameter_nonempty_rows:Object.fromEntries(
         paramNonempty.map((n,i)=>['slot'+(i+3),n])),
       original_reference_md5_replaced:false,
