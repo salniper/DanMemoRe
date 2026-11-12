@@ -152,6 +152,7 @@ jobs:
           for target in callees["callees"]:
               print("novel_executor_original_BL_target="+json.dumps({
                   "target_va":target["target_va"],
+                  "executable_section":target["target_executable_section"],
                   "inbound_call_count":target["source_call_count"],
                   "unwind_status":target["fde_status"],
                   "fde_start":target["unwind_start_va"],
