@@ -110,6 +110,26 @@ jobs:
                 json.dumps(callees["callee_fde_status_totals"],sort_keys=True))
           print("novel_executor_verified_opcode_handler_links="+
                 str(callees["numeric_opcode_to_native_handler_proven"]))
+          two_hop=report["original_executor_two_hop_novel_cpp_candidates"]
+          print("original_novel_second_hop_BL_sites="+
+                str(two_hop["total_second_hop_bl_sites"]))
+          print("original_novel_second_hop_unique_targets="+
+                str(two_hop["distinct_second_hop_targets"]))
+          print("original_novel_second_hop_fde_statuses="+
+                json.dumps(two_hop["second_hop_target_fde_status_counts"],sort_keys=True))
+          print("original_novel_second_hop_native_cpp_matches="+
+                str(two_hop["candidate_callees_with_handler_source_cpp"]))
+          print("original_novel_second_hop_verified_opcode_mappings="+
+                str(two_hop["numeric_opcode_to_native_handler_mappings_verified"]))
+          for region in two_hop["firsthop_regions"]:
+              print("original_novel_second_hop_region="+json.dumps({
+                  "firsthop_start":region["firsthop_fde_start_va"],
+                  "second_hop_bl_sites":region["second_hop_bl_sites"],
+                  "second_hop_distinct_targets":region["second_hop_distinct_targets"],
+                  "handler_cpp_candidate_callee_count":
+                    region["target_functions_with_novel_handler_cpp_labels"],
+                  "handler_cpp_candidate_samples":region["handler_source_candidates"][:18],
+              },sort_keys=True))
           second_hop=report["original_executor_direct_callee_code_shapes"]
           print("original_novel_unique_callee_code_regions="+
                 str(second_hop["verified_callee_fde_regions"]))
