@@ -403,7 +403,7 @@ assignments to each \`Xobject\`.
 | 33418076 | X24 | \`LDR X24,[SP,#80]\` | 9 |
 | 33418388 | X19 | \`LDR X19,[SP,#120]\` | 3 |
 | 33418712 | X21 | \`LDR X21,[SP,#64]\` | 3 |
-| 33418764 | X20 | \`ADD X20,SP,#imm\` (offset logged separately) | 45 |
+| 33418764 | X20 | \`ADD X20,SP,#32\` | 45 |
 | 33418828 | X20 | \`LDR X20,[SP,#120]\` | 3 |
 
 In total, **5** backwards matches are pointer loads from SP,
