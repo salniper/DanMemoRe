@@ -98,7 +98,8 @@ def inspect_direct_callees(blob, source_references, frames, precise):
             })
     result, verdicts = [], Counter()
     for target in targets:
-        if _unique_executable_section(sections, target) is None:
+        executable_sec = _unique_executable_section(sections, target)
+        if executable_sec is None:
             state, unwind = "TARGET_NOT_EXECUTABLE_ELF_SECTION", None
         else:
             state, unwind = _maybe_fde(blob, sections, segments, index, target)
@@ -112,6 +113,7 @@ def inspect_direct_callees(blob, source_references, frames, precise):
             ]
         result.append({
             "target_va": target,
+            "target_executable_section": executable_sec["name"] if executable_sec else None,
             "source_call_sites": inbound,
             "source_call_count": len(inbound),
             "fde_status": state,
