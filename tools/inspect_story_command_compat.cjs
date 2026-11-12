@@ -8,6 +8,7 @@ const { nativeMasterConfig, decodeFile } = require('./decode_master_data.cjs');
 const { inspectRootVector } = require('./inspect_story_flatbuffer_shape.cjs');
 const { profileStoryFields } = require('./inspect_story_field_profile.cjs');
 const { analyzeSix } = require('./inspect_story_command_sequence.cjs');
+const {loadEvidence,verifySixScriptStats} = require('./verify_novel_opcode_evidence.cjs');
 
 const IDS = ['751040548','751040550','751040806','751040815','751041273','751041275'];
 const PREFIX = '1/master/divide_novel_command_enc/';
@@ -93,6 +94,10 @@ function inspect(audit, contents, image) {
   return { verdict: 'DO_NOT_IMPORT_UNVERIFIED_BYTES', file_count: results.length,
     decoder_scope: 'Original Master AES-CBC/zlib with inferred FlatBuffers command slot shapes only; runtime playback and reference MD5 remain unverified',
     command_sequence_evidence:commandSequenceEvidence,
+    opcode_registry_evidence:
+      commandSequenceEvidence.status === 'SIX_OWNER_SCRIPTS_STRUCTURAL_SEQUENCE_EVIDENCE_ONLY'
+      ? verifySixScriptStats(commandSequenceEvidence,loadEvidence())
+      : {status:'NOT_RUN_NO_OPCODE_MAPPING_OR_IMPORT'},
     results };
 }
 function main(args) {
