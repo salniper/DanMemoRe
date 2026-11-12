@@ -1,0 +1,213 @@
+{
+  "format": "DANMEMORE_NATIVE_NOVEL_OPCODE_EVIDENCE_V1",
+  "native_client_build": "EU 15.1.0",
+  "original_native_libapp_sha256": "e49a8cc7991f8946365a28aebad605ce566b034826dd4b34a982ab18b38303b3",
+  "source_evidence": {
+    "native_metadata_ci": "https://github.com/salniper/DanMemoRe/actions/runs/43213233277",
+    "original_ciphertext_source": "owner preserved six novelCommand ciphertexts, verified only against owner's audit MD5, NOT reference MD5",
+    "original_story_record_count": 1266,
+    "unique_script_sequence_count": 4,
+    "unique_script_record_count": 801,
+    "repeated_script_record_count": 465,
+    "observed_opcode_count": 25,
+    "native_handler_class_name_count": 34,
+    "real_client_opcode_dispatch_verified": false,
+    "original_reference_md5_passed": false,
+    "ayn_thor_playback_verified": false
+  },
+  "unknown_opcode_behavior": "FAIL_CLOSED_NO_GAMEPLAY_EXECUTION",
+  "observed_opcodes": [
+    {
+      "opcode": 1,
+      "nonduplicate_record_count": 59,
+      "verified_native_handler": null,
+      "handler_mapping_status": "UNMAPPED_OPCODE_ONLY"
+    },
+    {
+      "opcode": 4,
+      "nonduplicate_record_count": 19,
+      "verified_native_handler": null,
+      "handler_mapping_status": "UNMAPPED_OPCODE_ONLY"
+    },
+    {
+      "opcode": 5,
+      "nonduplicate_record_count": 39,
+      "verified_native_handler": null,
+      "handler_mapping_status": "UNMAPPED_OPCODE_ONLY"
+    },
+    {
+      "opcode": 6,
+      "nonduplicate_record_count": 31,
+      "verified_native_handler": null,
+      "handler_mapping_status": "UNMAPPED_OPCODE_ONLY"
+    },
+    {
+      "opcode": 7,
+      "nonduplicate_record_count": 32,
+      "verified_native_handler": null,
+      "handler_mapping_status": "UNMAPPED_OPCODE_ONLY"
+    },
+    {
+      "opcode": 10,
+      "nonduplicate_record_count": 4,
+      "verified_native_handler": null,
+      "handler_mapping_status": "UNMAPPED_OPCODE_ONLY"
+    },
+    {
+      "opcode": 11,
+      "nonduplicate_record_count": 211,
+      "verified_native_handler": null,
+      "handler_mapping_status": "UNMAPPED_OPCODE_ONLY"
+    },
+    {
+      "opcode": 12,
+      "nonduplicate_record_count": 2,
+      "verified_native_handler": null,
+      "handler_mapping_status": "UNMAPPED_OPCODE_ONLY"
+    },
+    {
+      "opcode": 15,
+      "nonduplicate_record_count": 81,
+      "verified_native_handler": null,
+      "handler_mapping_status": "UNMAPPED_OPCODE_ONLY"
+    },
+    {
+      "opcode": 16,
+      "nonduplicate_record_count": 16,
+      "verified_native_handler": null,
+      "handler_mapping_status": "UNMAPPED_OPCODE_ONLY"
+    },
+    {
+      "opcode": 18,
+      "nonduplicate_record_count": 73,
+      "verified_native_handler": null,
+      "handler_mapping_status": "UNMAPPED_OPCODE_ONLY"
+    },
+    {
+      "opcode": 19,
+      "nonduplicate_record_count": 26,
+      "verified_native_handler": null,
+      "handler_mapping_status": "UNMAPPED_OPCODE_ONLY"
+    },
+    {
+      "opcode": 20,
+      "nonduplicate_record_count": 26,
+      "verified_native_handler": null,
+      "handler_mapping_status": "UNMAPPED_OPCODE_ONLY"
+    },
+    {
+      "opcode": 22,
+      "nonduplicate_record_count": 13,
+      "verified_native_handler": null,
+      "handler_mapping_status": "UNMAPPED_OPCODE_ONLY"
+    },
+    {
+      "opcode": 23,
+      "nonduplicate_record_count": 15,
+      "verified_native_handler": null,
+      "handler_mapping_status": "UNMAPPED_OPCODE_ONLY"
+    },
+    {
+      "opcode": 24,
+      "nonduplicate_record_count": 16,
+      "verified_native_handler": null,
+      "handler_mapping_status": "UNMAPPED_OPCODE_ONLY"
+    },
+    {
+      "opcode": 27,
+      "nonduplicate_record_count": 37,
+      "verified_native_handler": null,
+      "handler_mapping_status": "UNMAPPED_OPCODE_ONLY"
+    },
+    {
+      "opcode": 29,
+      "nonduplicate_record_count": 20,
+      "verified_native_handler": null,
+      "handler_mapping_status": "UNMAPPED_OPCODE_ONLY"
+    },
+    {
+      "opcode": 30,
+      "nonduplicate_record_count": 17,
+      "verified_native_handler": null,
+      "handler_mapping_status": "UNMAPPED_OPCODE_ONLY"
+    },
+    {
+      "opcode": 32,
+      "nonduplicate_record_count": 5,
+      "verified_native_handler": null,
+      "handler_mapping_status": "UNMAPPED_OPCODE_ONLY"
+    },
+    {
+      "opcode": 36,
+      "nonduplicate_record_count": 40,
+      "verified_native_handler": null,
+      "handler_mapping_status": "UNMAPPED_OPCODE_ONLY"
+    },
+    {
+      "opcode": 37,
+      "nonduplicate_record_count": 4,
+      "verified_native_handler": null,
+      "handler_mapping_status": "UNMAPPED_OPCODE_ONLY"
+    },
+    {
+      "opcode": 39,
+      "nonduplicate_record_count": 2,
+      "verified_native_handler": null,
+      "handler_mapping_status": "UNMAPPED_OPCODE_ONLY"
+    },
+    {
+      "opcode": 40,
+      "nonduplicate_record_count": 11,
+      "verified_native_handler": null,
+      "handler_mapping_status": "UNMAPPED_OPCODE_ONLY"
+    },
+    {
+      "opcode": 41,
+      "nonduplicate_record_count": 2,
+      "verified_native_handler": null,
+      "handler_mapping_status": "UNMAPPED_OPCODE_ONLY"
+    }
+  ],
+  "original_native_handler_class_names": [
+    "NovelCommandAnimationTextMove",
+    "NovelCommandAnimationTextSet",
+    "NovelCommandAnimationTextShow",
+    "NovelCommandCharacterAction",
+    "NovelCommandCharacterEffect",
+    "NovelCommandCharacterFace",
+    "NovelCommandCharacterHide",
+    "NovelCommandCharacterMove",
+    "NovelCommandCharacterRotate",
+    "NovelCommandCharacterScale",
+    "NovelCommandCharacterShow",
+    "NovelCommandCharacterZOrder",
+    "NovelCommandDescriptiveText",
+    "NovelCommandEffectHide",
+    "NovelCommandEffectShow",
+    "NovelCommandGoToCommandId",
+    "NovelCommandImageMove",
+    "NovelCommandImageRotate",
+    "NovelCommandImageScale",
+    "NovelCommandImageWipe",
+    "NovelCommandLwfFlip",
+    "NovelCommandLwfHide",
+    "NovelCommandLwfMove",
+    "NovelCommandLwfParent",
+    "NovelCommandLwfRotate",
+    "NovelCommandLwfScale",
+    "NovelCommandLwfSet",
+    "NovelCommandLwfShow",
+    "NovelCommandLwfZOrder",
+    "NovelCommandMovieStartWait",
+    "NovelCommandQuakeStart",
+    "NovelCommandStillHide",
+    "NovelCommandStillShow",
+    "NovelCommandTalkShow"
+  ],
+  "evidence_boundaries": [
+    "Observed opcode counts are from only four nonduplicate sequences among the owner's six mismatched story assets.",
+    "Original source-file paths in SHA-authenticated native metadata establish class names, not numeric opcode dispatch assignments.",
+    "No opcode ID is mapped to a class without verified native factory/dispatch code flow or a captured native runtime trace.",
+    "Do not generate a playback interpreter or bypass importer hash checks based on this evidence."
+  ]
+}
