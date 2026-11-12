@@ -1082,3 +1082,69 @@ or plaintext.
 content versions, examine original novel-command field semantics,
 and perform an isolated client-side acceptance test. Do not waive
 reference MD5 merely on structural decode success.
+
+
+## Native-key six-script command field layout and duplicate-sequence proof (2026-11-12)
+
+The owner's actual six SHA/MD5-audited encrypted \`novelCommand*.enc\` files
+were independently decrypted under the previously SHA-authenticated
+EU 15.1.0 original ARM64 Master **AES-256-CBC / XXTEA numeric configuration**
+in a private local diagnostic session. Input sources were never modified.
+No original key, decrypted text, encrypted source or novel asset is committed.
+
+All six decoded payloads share **ten populated FlatBuffers field slots**
+(0–9) in every table row; the eleventh vtable slot is absent. Measured
+inferred field types and invariants:
+
+| Slot(s) | Direct field decode | Observed invariant | Interpretation |
+| --- | --- | --- | --- |
+| 0 | XXTEA-encoded signed 64-bit integer | Unique, strictly contiguous ascending within each file | Command record identity (strong evidence) |
+| 1 | XXTEA-encoded signed 64-bit integer | Constant per file, exactly the \`novelCommand<id>\` filename ID | Story/script identity (strong evidence) |
+| 2 | XXTEA-encoded signed 32-bit integer | Observed 1–41, 25 distinct codes over the four nonduplicated script sequences | **Command-type candidate**, no command function names verified |
+| 3–9 | XXTEA-encoded UTF-8 strings | Seven typed parameter slots per record; empty strings allowed | **Parameters only**; presentation text, actor binding and command semantics not verified |
+
+### Actual decoded rows
+
+| Script ID | Records | Opcode/parameter relationship |
+| --- | ---: | --- |
+| 751040548 | 123 | Exact command+parameters match against 751041273 |
+| 751040550 | 342 | Exact command+parameters match against 751041275 |
+| 751040806 | 90 | Independent sequence |
+| 751040815 | 246 | Independent sequence |
+| 751041273 | 123 | 123/123 rows repeat 751040548 **except slots 0 and 1** |
+| 751041275 | 342 | 342/342 rows repeat 751040550 **except slots 0 and 1** |
+
+For the two duplicate script pairs **465/465 rows** have exactly matching
+slot-2 numeric command codes and all seven decoded UTF-8 parameter strings
+in the original order. Their slot-0 per-record IDs and slot-1 story IDs
+correctly differ. Neither pair has byte-identical encrypted content;
+this is an **in-memory decoded-field equivalence** check.
+
+The script structure is therefore sufficiently understood for **safe,
+read-only sequence consistency checks**, but **not** for a script interpreter:
+the numeric command codes have not been associated with publisher
+playback handlers, actor/text references, animation or timing, and the
+seven string slot meanings are not independently proven. Do not
+confuse a 465-row duplicate-content match with successful original
+client playback. Most string values are ASCII-shaped technical
+parameters; it is not proven that narrative dialogue resides here.
+
+The new \`tools/inspect_story_field_profile.cjs\` and
+\`tools/inspect_story_command_sequence.cjs\` provide repeatable,
+metadata-only, bounded validation of ten-slot shape, original
+numerical and string types, command ID continuity, story identity,
+opcode histograms, string-slot occupancy and two pair comparisons.
+\`tools/inspect_story_command_compat.cjs\` now calls them after a
+strict original-client decode, and still reports
+\`DO_NOT_IMPORT_UNVERIFIED_BYTES\`.
+Synthetic CI covers malformed structures, altered script IDs,
+noncontiguous command IDs, changed repeated parameters and
+unknown/oversized rows without committing original bytes.
+
+**Limits:** This is verified on the exact owner's preserved **mismatched**
+backup, **not** on reference-exact original assets. Six encrypted
+story files and four Master tables continue to fail required reference
+MD5 despite genuine successful decode. The original seven
+phase-manifest corrections are the only 7/19 formally repaired
+mismatches; 12 remain import blockers. No original-game runtime or
+AYN Thor story scene has been accepted. PR stays Draft.
