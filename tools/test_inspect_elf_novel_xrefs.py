@@ -27,12 +27,27 @@ class ElfNovelReferenceTests(unittest.TestCase):
         hit = self.novel_hit(fixture())
         self.assertEqual(hit["literal_hits"], 1)
         self.assertEqual(hit["locations"][0]["virtual_address"], 0x2180)
-        self.assertEqual(hit["locations"][0]["adrp_add"]["candidate_count"], 1)
+        self.assertEqual(hit["locations"][0]["address_references"]["candidate_count"], 1)
+
+    def test_adr_literal_reference(self):
+        blob = fixture()
+        # ADR X0,#0x118 at PC 0x1068 => mapped 0x2180.
+        # Synthetic direct ADR points to exactly the same literal as ADRP+ADD.
+        # At file offset 0x100, PC=0x1000; target=0x2180 exceeds ADR range? No (0x1180).
+        # immhi = displacement >> 2, immlo = displacement & 3.
+        displacement = 0x2180 - 0x1000
+        instruction = 0x10000000 | ((displacement & 3) << 29) | (((displacement >> 2) & 0x7ffff) << 5)
+        struct.pack_into("<I", blob, 0x100, instruction)
+        struct.pack_into("<I", blob, 0x104, 0xd503201f)
+        hit = self.novel_hit(blob)
+        refs = hit["locations"][0]["address_references"]
+        self.assertEqual(refs["candidate_count"], 1)
+        self.assertEqual(refs["candidates"][0]["instruction_pattern"], "ADR")
 
     def test_literal_without_reference(self):
         blob = fixture()
         struct.pack_into("<I", blob, 0x104, 0)
-        self.assertEqual(self.novel_hit(blob)["locations"][0]["adrp_add"]["candidate_count"], 0)
+        self.assertEqual(self.novel_hit(blob)["locations"][0]["address_references"]["candidate_count"], 0)
 
     def test_wrong_architecture(self):
         blob = fixture()
