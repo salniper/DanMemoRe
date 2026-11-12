@@ -36,7 +36,7 @@ jobs:
           fi
 
           if ! python3 tools/verify_pristine_arm64_xapk.py \
-               --xapk "$candidate" --scan > "$local_dir/report.json"; then
+               --xapk "$candidate" --scan --context > "$local_dir/report.json"; then
             echo "CANDIDATE_REJECTED: pinned original archive/native hashes or structure did not validate." | tee -a "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
@@ -64,6 +64,23 @@ jobs:
                       "candidates": refs["candidates"],
                       "truncated": refs["truncated"],
                   }, separators=(",", ":"), sort_keys=True))
+          # Bounded, metadata-only nearby function/call classification.
+          # No source code bytes, disassembly instructions, key material or data.
+          code_context = report["story_code_context"]
+          print("native_context_status=" + code_context["status"])
+          print("native_context_site_count=" + str(code_context["candidate_site_count"]))
+          for site in code_context["sites"]:
+              print("native_context_site=" + json.dumps({
+                  "marker": site["marker"],
+                  "literal_form": site["literal_form"],
+                  "xref_file_offset": site["xref_file_offset"],
+                  "xref_pattern": site["xref_pattern"],
+                  "possible_frame_start_offset": site["possible_frame_start_offset"],
+                  "first_following_return_offset": site["first_following_return_offset"],
+                  "window_control_flow_event_count": site["window_control_flow_event_count"],
+                  "window_control_flow_events": site["window_control_flow_events"],
+                  "window_events_truncated": site["window_events_truncated"],
+              }, separators=(",", ":"), sort_keys=True))
           print("novel_marker_address_candidates_total=" + str(sum(
               entry["address_references"]["candidate_count"]
               for row in scan["markers"]
