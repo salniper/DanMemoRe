@@ -13,6 +13,7 @@ from pathlib import Path
 import zipfile
 
 from inspect_native_novel_dispatch_seeds import inspect_original_dispatch_seeds
+from inspect_native_novel_executor_flow import analyze_executor_neighborhoods
 from verify_pristine_arm64_xapk import (
     inspect_xapk, ARM64_SPLIT, LIBAPP_PATH, MAX_SPLIT_SIZE, MAX_LIBAPP_SIZE,
     PINNED_SHA256, one_member,
@@ -36,6 +37,7 @@ def inspect_original_source(path):
     if hashlib.sha256(original).hexdigest() != PINNED_SHA256:
         raise ValueError("original native SHA no longer matches the pinned source")
     report = inspect_original_dispatch_seeds(original)
+    executor_flow = analyze_executor_neighborhoods(original, report)
     with_candidates = [
         {
             "kind": r["kind"],
@@ -54,6 +56,7 @@ def inspect_original_source(path):
         "code_referenced_original_labels":
             report["original_source_labels_with_instruction_candidates"],
         "code_site_candidates": report["original_code_site_candidate_count"],
+        "original_executor_neighborhoods": executor_flow,
         "candidate_referenced_labels": with_candidates[:60],
         "candidate_labels_truncated": len(with_candidates) > 60,
         "numeric_opcode_to_handler_mappings_verified": 0,
