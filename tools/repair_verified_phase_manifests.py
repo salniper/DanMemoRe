@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Recover three independently byte-verified phase manifests into a separate directory.
+"""Recover seven independently byte-verified phase manifests into a separate directory.
 
 No proprietary game bytes are bundled. By default this is READ-ONLY. Never
-modifies the user's source contents, and never bypasses the 16 other mismatches.
+modifies the user's source contents, and never bypasses the 12 other mismatches.
 """
 import argparse
 import hashlib
@@ -14,6 +14,22 @@ REFERENCE_VERSION = b"4ab12a6c3f219553661ff647ae79e322"
 # Actual source hashes from AYN Thor's uploaded files; targets independently
 # pinned by the reference and historical project.manifest.1 indexes.
 REPAIRS = {
+    "1/manifests/phase.manifest.1": {
+        "size": 355,
+        "source_sha256": "b8b7cee93ed2bdc3aa4c427d58c341e04aee78b60c788d9dc899e73d9de39b76",
+        "repaired_sha256": "ec0e35a630e80cecdcdde75dd249ea753b42535b0cd3812556d72ee5ba9930f6",
+        "reference_md5": "48301e64e3fba6508ba6033e4e7b2742",
+        "old_size_field": 536818947,
+        "new_size_field": 623213094,
+    },
+    "1/manifests/phase.manifest.2": {
+        "size": 355,
+        "source_sha256": "765d2a49200fabfe4d17e60bc81439f7a4f77d2e6b23f109e040d05649251648",
+        "repaired_sha256": "ac798e3544caa70311b854051931dd16319f6cfd1b90f2b3004b0bfb44e756d1",
+        "reference_md5": "6dc83eeac2c38e1787e78bc8b02d305a",
+        "old_size_field": 628755188,
+        "new_size_field": 728637082,
+    },
     "1/manifests/phase.manifest.3": {
         "size": 356,
         "source_sha256": "9d65e13a20012f36e0d7597456e3d977659400ba7f45c2ac90fcd9ad02e9cda2",
@@ -21,6 +37,14 @@ REPAIRS = {
         "reference_md5": "a7aeb999419e537e585f08eaaddb2128",
         "old_size_field": 2911947083,
         "new_size_field": 2912187403,
+    },
+    "1/manifests/phase.manifest.4": {
+        "size": 356,
+        "source_sha256": "8393d8107e5b6a194396399308eb8dbd69a4ab3b070357bb9f71691b13c3778f",
+        "repaired_sha256": "b18989f02a2eac6ac5003db92dfd7ec1b396b635b8379e2e27245e6b70f121ee",
+        "reference_md5": "6fa0e9aaed2304b6f366fecc9cab72c2",
+        "old_size_field": 1065258112,
+        "new_size_field": 1745645577,
     },
     "1/manifests/phase.manifest.6": {
         "size": 354,
@@ -33,6 +57,13 @@ REPAIRS = {
         "source_sha256": "d83cc4961eb8cccd0145527e4b39f9618ed867ef8707ac7cba45d5b74a5c517f",
         "repaired_sha256": "bf0385f55c6c1040951b32acf06062b543263509a10345608e2b07f75f662697",
         "reference_md5": "3bc336eab43c1c16350aab4a9a0ee5f4",
+    },    "1/manifests/phase.manifest.8": {
+        "size": 355,
+        "source_sha256": "86146b5bc9db2860bab3e668ffa362eb1dcd4b20af51fa536be6c707fae5368e",
+        "repaired_sha256": "303f8d28afdab031e26c3f5f92660db917e24ed779ac7e85df2e33fc042a6966",
+        "reference_md5": "7eff0561c5239786ceaa7eb0fd08bd71",
+        "old_size_field": 176585414,
+        "new_size_field": 280990034,
     },
 }
 
@@ -112,7 +143,7 @@ def main():
     names = run(args.contents, args.output_dir, args.apply)
     print(f"Verified {len(names)} phase manifests against reference SHA-256 and MD5.")
     print("Created separate output copies." if args.apply else "DRY RUN; no files changed.")
-    print("16 OTHER ASSETS STILL UNVERIFIED. Do not import these as a complete fix.")
+    print(f"{19 - len(REPAIRS)} OTHER ASSETS STILL UNVERIFIED. Do not import these as a complete fix.")
 
 
 if __name__ == "__main__":
