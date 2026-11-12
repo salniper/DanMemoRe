@@ -48,9 +48,11 @@ def collect_original_labels(blob, segments, sections):
             cursor = match + len(b"NovelCommand")
             left = blob.rfind(b"\0", lo, match)
             right = blob.find(b"\0", match, min(hi, match + MAX_LABEL_SIZE + 1))
-            if left < 0 or right < 0 or right - left - 1 > MAX_LABEL_SIZE:
+            if right < 0:
                 continue
-            start = left + 1
+            start = lo if left < 0 else left + 1
+            if right - start > MAX_LABEL_SIZE:
+                continue
             if start in found:
                 continue
             raw = blob[start:right]
