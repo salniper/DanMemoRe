@@ -910,3 +910,48 @@ client content was committed.
 seven phase repairs remain valid; **12/19 mismatches** still require
 reference authentication. This PR remains Draft, with no Android
 installation, original game import, gameplay acceptance or merge.
+
+
+## Original EU 15.1.0 XAPK cross-archive recovery check (2026-11-12)
+
+After the correct original native was cryptographically authenticated, a
+read-only scan checked **all 6 nested APK splits** of the exact pinned EU
+15.1.0 XAPK for the **12 remaining reference-mismatched assets**, comparing
+exact expected **size and MD5**. No APK, original .enc file, novel content
+or keys were committed or uploaded.
+
+[Original source scan log](https://github.com/salniper/DanMemoRe/actions/runs/43195596616)
+reports \`original_xapk_nested_apks=6\` and
+\`reference_exact_asset_targets_in_original_xapk=0\`.
+
+| Expected blocked asset group | Same-basename files found among APK members | Reference-exact size/MD5 |
+| --- | ---: | ---: |
+| Four \`1/master/divide_enc/*.enc\` files | Four, one for each basename | **0** — all four have a DIFFERENT byte size |
+| Six \`novelCommand*.enc\` files | None | 0 |
+| \`1/files/font/number.png\` | None | 0 |
+| \`3/files/ui_atlas/home_gacha/gacha_top_move_parts_text.json\` | None | 0 |
+
+This result is genuine negative evidence for **visible ZIP members of the
+authenticated XAPK's nested APKs**. It is not proof that matching source
+bytes do not exist elsewhere: remotely downloaded final content, OBB data,
+differently named encoded archives or independent preserved cache snapshots
+were not searched. The four installer-bundled master files must **not**
+be substituted for later content-manifest versions solely by name.
+
+New \`tools/audit_original_xapk_asset_candidates.py\` pins the twelve
+reference MD5s/sizes and checks candidates without exporting bytes.
+Its CLI requires the original XAPK and embedded ARM64 library SHA checks
+to succeed first, then opens bounded nested APK members. It refuses
+malformed archives, excessive duplicate names and oversize members.
+[Synthetic audit regression job](https://github.com/salniper/DanMemoRe/actions/runs/43195596605)
+passed alongside the other policy checks.
+
+**Impact:** The source XAPK does not directly repair any of the twelve
+remaining mismatches. The seven already exact phase-manifest repairs and
+33 separately verified Phase-1 APK assets are unchanged. Next recovery
+focus should be **independent complete 15.1.0 EU content caches** or
+native master/story compatibility analysis on the owner's actual six
+ciphertexts, without weakening the import MD5 gate.
+
+**Do not merge** PR #1; no original archive/AYN Thor mutation, real legacy
+import, or native story/battle/gacha acceptance occurred.
