@@ -56,7 +56,7 @@ def sign_extend(value, bits):
 
 
 def find_references(blob, segments, target, limit=MAX_HITS):
-    """Only adjacent ADRP Xn / ADD Xd,Xn,#imm candidates in executable segments."""
+    """Find direct ADR and adjacent ADRP+ADD address candidates, not call sites."""
     matches = []
     total = 0
     for segment in segments:
@@ -65,26 +65,32 @@ def find_references(blob, segments, target, limit=MAX_HITS):
         low = segment["offset"]
         high = low + segment["size"]
         first = low + ((-segment["vaddr"]) % 4)
-        for off in range(first, high - 7, 4):
-            adrp, add = struct.unpack_from("<II", blob, off)
-            if (adrp & 0x9f000000) != 0x90000000:
-                continue
-            if (add & 0xff000000) != 0x91000000:
-                continue
-            reg = adrp & 31
-            if ((add >> 5) & 31) != reg:
-                continue
-            imm21 = (((adrp >> 5) & 0x7ffff) << 2) | ((adrp >> 29) & 3)
+        for off in range(first, high - 3, 4):
+            word = struct.unpack_from("<I", blob, off)[0]
             pc = segment["vaddr"] + off - low
-            page = (pc & ~4095) + (sign_extend(imm21, 21) << 12)
-            imm12 = (add >> 10) & 0xfff
-            shift = 12 if (add >> 22) & 1 else 0
-            if page + (imm12 << shift) != target:
+            kind = None
+            if (word & 0x9f000000) == 0x10000000:  # ADR immediate, byte displacement
+                imm21 = (((word >> 5) & 0x7ffff) << 2) | ((word >> 29) & 3)
+                if pc + sign_extend(imm21, 21) == target:
+                    kind = "ADR"
+            if (word & 0x9f000000) == 0x90000000 and off + 8 <= high:
+                add = struct.unpack_from("<I", blob, off + 4)[0]
+                if (add & 0xff000000) == 0x91000000:
+                    reg = word & 31
+                    if ((add >> 5) & 31) == reg:
+                        imm21 = (((word >> 5) & 0x7ffff) << 2) | ((word >> 29) & 3)
+                        page = (pc & ~4095) + (sign_extend(imm21, 21) << 12)
+                        imm12 = (add >> 10) & 0xfff
+                        shift = 12 if (add >> 22) & 1 else 0
+                        if page + (imm12 << shift) == target:
+                            kind = "ADRP_ADD"
+            if kind is None:
                 continue
             total += 1
             if len(matches) < limit:
                 matches.append({"instruction_file_offset": off,
-                                "instruction_virtual_address": pc})
+                                "instruction_virtual_address": pc,
+                                "instruction_pattern": kind})
     return {"candidate_count": total, "candidates": matches,
             "truncated": total > len(matches)}
 
@@ -103,13 +109,13 @@ def inspect(blob):
             if len(locations) < MAX_HITS:
                 locations.append({
                     "file_offset": offset, "virtual_address": va,
-                    "adrp_add": find_references(blob, segments, va) if va is not None else None,
+                    "address_references": find_references(blob, segments, va) if va is not None else None,
                 })
             start = offset + 1
         result.append({"marker": marker, "literal_hits": count,
                        "locations": locations, "truncated": count > len(locations)})
     return {"status": "CANDIDATE_STATIC_REFERENCES_ONLY", "markers": result,
-            "limitations": "Adjacent ADRP+ADD does not establish a loader, control-flow, decryption, or compatibility."}
+            "limitations": "ADR or adjacent ADRP+ADD does not establish a loader, control-flow, decryption, or compatibility."}
 
 
 def main():
