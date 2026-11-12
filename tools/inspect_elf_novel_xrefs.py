@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read-only ELF64/AArch64 literal-to-virtual-address and ADRP+ADD candidates.
+"""Read-only ELF64/AArch64 literal mapping and bounded single-pass ADR/ADRP+ADD candidates.
 
 Do not treat data-address candidates as call sites, decryptors, or parser proof.
 """
@@ -55,10 +55,19 @@ def sign_extend(value, bits):
     return value - (1 << bits) if value & (1 << (bits - 1)) else value
 
 
-def find_references(blob, segments, target, limit=MAX_HITS):
-    """Find direct ADR and adjacent ADRP+ADD address candidates, not call sites."""
-    matches = []
-    total = 0
+MAX_LITERAL_OCCURRENCES = 8192
+
+
+def find_references_multi(blob, segments, targets, limit=MAX_HITS):
+    """Scan executable segments ONCE for direct ADR / adjacent ADRP+ADD targets.
+
+    Does not disassemble control flow, pointer-indirect references, GOT or
+    register aliases. Report locations only; this is not a decryption proof.
+    """
+    references = {
+        target: {"candidate_count": 0, "candidates": [], "truncated": False}
+        for target in targets
+    }
     for segment in segments:
         if not segment["executable"]:
             continue
@@ -68,12 +77,13 @@ def find_references(blob, segments, target, limit=MAX_HITS):
         for off in range(first, high - 3, 4):
             word = struct.unpack_from("<I", blob, off)[0]
             pc = segment["vaddr"] + off - low
+            target = None
             kind = None
-            if (word & 0x9f000000) == 0x10000000:  # ADR immediate, byte displacement
+            if (word & 0x9f000000) == 0x10000000:
                 imm21 = (((word >> 5) & 0x7ffff) << 2) | ((word >> 29) & 3)
-                if pc + sign_extend(imm21, 21) == target:
-                    kind = "ADR"
-            if (word & 0x9f000000) == 0x90000000 and off + 8 <= high:
+                target = pc + sign_extend(imm21, 21)
+                kind = "ADR"
+            elif (word & 0x9f000000) == 0x90000000 and off + 8 <= high:
                 add = struct.unpack_from("<I", blob, off + 4)[0]
                 if (add & 0xff000000) == 0x91000000:
                     reg = word & 31
@@ -82,40 +92,84 @@ def find_references(blob, segments, target, limit=MAX_HITS):
                         page = (pc & ~4095) + (sign_extend(imm21, 21) << 12)
                         imm12 = (add >> 10) & 0xfff
                         shift = 12 if (add >> 22) & 1 else 0
-                        if page + (imm12 << shift) == target:
-                            kind = "ADRP_ADD"
-            if kind is None:
+                        target = page + (imm12 << shift)
+                        kind = "ADRP_ADD"
+            entry = references.get(target)
+            if entry is None:
                 continue
-            total += 1
-            if len(matches) < limit:
-                matches.append({"instruction_file_offset": off,
-                                "instruction_virtual_address": pc,
-                                "instruction_pattern": kind})
-    return {"candidate_count": total, "candidates": matches,
-            "truncated": total > len(matches)}
+            entry["candidate_count"] += 1
+            if len(entry["candidates"]) < limit:
+                entry["candidates"].append({
+                    "instruction_file_offset": off,
+                    "instruction_virtual_address": pc,
+                    "instruction_pattern": kind,
+                })
+    for entry in references.values():
+        entry["truncated"] = entry["candidate_count"] > len(entry["candidates"])
+    return references
+
+
+def find_references(blob, segments, target, limit=MAX_HITS):
+    """Compatibility helper for a single target; same evidence limitations."""
+    return find_references_multi(blob, segments, (target,), limit)[target]
 
 
 def inspect(blob):
     segments = elf_segments(blob)
-    result = []
+    all_locations = {}
+    targets = set()
     for marker in MARKERS:
-        start, count, locations = 0, 0, []
+        needle = marker.encode("ascii")
+        offsets = []
+        start = 0
         while True:
-            offset = blob.find(marker.encode("ascii"), start)
+            offset = blob.find(needle, start)
             if offset < 0:
                 break
-            count += 1
+            if len(offsets) >= MAX_LITERAL_OCCURRENCES:
+                raise ValueError("too many marker occurrences to inspect safely")
             va = map_offset(segments, offset)
-            if len(locations) < MAX_HITS:
-                locations.append({
-                    "file_offset": offset, "virtual_address": va,
-                    "address_references": find_references(blob, segments, va) if va is not None else None,
-                })
+            offsets.append((offset, va))
+            if va is not None:
+                targets.add(va)
             start = offset + 1
-        result.append({"marker": marker, "literal_hits": count,
-                       "locations": locations, "truncated": count > len(locations)})
-    return {"status": "CANDIDATE_STATIC_REFERENCES_ONLY", "markers": result,
-            "limitations": "ADR or adjacent ADRP+ADD does not establish a loader, control-flow, decryption, or compatibility."}
+        all_locations[marker] = offsets
+
+    references = find_references_multi(blob, segments, targets)
+    result = []
+    for marker, offsets in all_locations.items():
+        # Prioritize referenced literals so a relevant reference beyond the
+        # first 40 same-name strings remains visible in the bounded report.
+        referenced = [(off, va) for off, va in offsets
+                      if va is not None and references[va]["candidate_count"]]
+        selected = referenced[:MAX_HITS]
+        chosen = {off for off, _ in selected}
+        for off, va in offsets:
+            if len(selected) >= MAX_HITS:
+                break
+            if off not in chosen:
+                selected.append((off, va))
+                chosen.add(off)
+        locations = [{
+            "file_offset": off, "virtual_address": va,
+            "address_references": references[va] if va is not None else None,
+        } for off, va in selected]
+        result.append({
+            "marker": marker,
+            "literal_hits": len(offsets),
+            "referenced_literal_hits": len(referenced),
+            "locations": locations,
+            "truncated": len(offsets) > len(locations),
+        })
+    return {
+        "status": "CANDIDATE_STATIC_REFERENCES_ONLY",
+        "markers": result,
+        "scan_scope": "ALL_BOUNDED_LITERAL_OCCURRENCES_ONE_EXECUTABLE_PASS",
+        "limitations": (
+            "ADR/adjacent ADRP+ADD only; neither references nor missing references "
+            "establish control flow, decryption, asset identity, or compatibility."
+        ),
+    }
 
 
 def main():
