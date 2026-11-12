@@ -15,6 +15,7 @@ import zipfile
 from inspect_native_novel_dispatch_seeds import inspect_original_dispatch_seeds
 from inspect_native_novel_executor_flow import analyze_executor_neighborhoods
 from inspect_native_novel_unwind import find_executor_unwind_frames, summarize_verified_fde_instructions
+from inspect_native_novel_direct_callees import inspect_direct_callees
 from inspect_native_novel_elf_sections import parse_sections
 from verify_pristine_arm64_xapk import (
     inspect_xapk, ARM64_SPLIT, LIBAPP_PATH, MAX_SPLIT_SIZE, MAX_LIBAPP_SIZE,
@@ -51,6 +52,8 @@ def inspect_original_source(path):
     executor_flow = analyze_executor_neighborhoods(original, report)
     unwind_frames = find_executor_unwind_frames(original, report)
     precise_region_code = summarize_verified_fde_instructions(original, unwind_frames)
+    direct_callees = inspect_direct_callees(original, report, unwind_frames,
+                                           precise_region_code)
     with_candidates = [
         {
             "kind": r["kind"],
@@ -72,6 +75,7 @@ def inspect_original_source(path):
         "original_executor_neighborhoods": executor_flow,
         "original_executor_unwind_frames": unwind_frames,
         "original_executor_cfi_region_code": precise_region_code,
+        "original_executor_direct_callees": direct_callees,
         "original_unwind_section_evidence": unwind,
         "candidate_referenced_labels": with_candidates[:60],
         "candidate_labels_truncated": len(with_candidates) > 60,
