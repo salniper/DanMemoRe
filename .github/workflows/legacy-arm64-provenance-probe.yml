@@ -41,6 +41,35 @@ jobs:
             exit 0
           fi
 
+          # Source content search is read-only. Every candidate must match
+          # the reference asset MD5 AND size; names alone prove nothing.
+          python3 tools/audit_original_xapk_asset_candidates.py \
+            --xapk "$candidate" > "$local_dir/asset_candidates.json"
+
+          python3 - "$local_dir/asset_candidates.json" <<'PY'
+          import json, sys, os
+          with open(sys.argv[1], encoding="utf-8") as source:
+              audit = json.load(source)
+          print("original_xapk_nested_apks=" + str(audit["nested_apk_count"]))
+          print("reference_exact_asset_targets_in_original_xapk=" +
+                str(audit["reference_exact_target_count"]))
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
+              summary.write("Exact legacy asset candidates in authenticated original EU XAPK: " +
+                            str(audit["reference_exact_target_count"]) + " / 12.\n")
+          for path, record in audit["targets"].items():
+              if record["basename_occurrences"]:
+                  print("original_xapk_asset_candidate=" + json.dumps({
+                      "path": path,
+                      "basename_occurrences": record["basename_occurrences"],
+                      "wrong_size_occurrences": record["wrong_size_occurrences"],
+                      "same_size_nonmatching_occurrences":
+                          record["same_size_nonmatching_occurrences"],
+                      "reference_exact_occurrences":
+                          record["reference_exact_occurrences"],
+                      "reference_exact_locations": record["reference_exact_locations"],
+                  }, sort_keys=True))
+          PY
+
           python3 - "$local_dir/report.json" <<'PY'
           import json, sys, os
           with open(sys.argv[1], encoding="utf-8") as source:
