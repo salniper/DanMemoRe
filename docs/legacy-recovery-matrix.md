@@ -458,3 +458,23 @@ node tools/inspect_story_command_compat.cjs \
 Next proof gate: identify the native novel-command loader and actual decoded
 schema; cross-check with an independently archived compatible EU asset version.
 Do not infer these six are authenticated from AES/zlib probe success.
+
+
+### Pinned six-file observed snapshot (not reference authentication)
+
+The owner's 2026-11-11 read-only on-device triage reported these six bytesets,
+independently of the *expected* reference MD5. These SHA-256 values are for
+tracking the **observed unverified backup**, not an alternative import allowlist.
+
+| Story command ID | Observed bytes | Observed SHA-256 |
+| --- | ---: | --- |
+| 751040548 | 8,464 | `d53a86d5cd262d1079b689cacad417f72a6440b3510718a9d0f04713f005c944` |
+| 751040550 | 17,376 | `d9faa5a25ad4b3c840a97983c621b42eb3311a9580c0a90589803c3a7576cd73` |
+| 751040806 | 7,632 | `8798ef7781b21b499f60e8c839680fd16f2fe99a108382e6a81bddc22f8f6d03` |
+| 751040815 | 17,600 | `753baa9da840dec0d9b517ab25ad9b0fb5b8b7a717cb81c9ebf08c3dc2d6c4d5` |
+| 751041273 | 8,464 | `def70d37c83ecac2baf017dc804e12b05bfbb8aef42b973bdef00d81b384da5d` |
+| 751041275 | 17,376 | `43273430625a751ffacda93f60a7cb6469e971c7f066322d0ee71208936cd644` |
+
+The equal-length pairs (548/1273 and 550/1275) have **different
+SHA-256s**. Equal length alone does not demonstrate identical commands or
+a shared schema. All six remain reference-MD5 mismatches.
