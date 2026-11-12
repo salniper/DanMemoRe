@@ -69,6 +69,15 @@ jobs:
               at=offset+1
           print("NOVEL_RTTI_PRINTABLE_STRING_VARIANTS="+str(len(matches)))
           print("NOVEL_RTTI_TOP="+json.dumps(matches.most_common(25),ensure_ascii=True))
+          # Original source-path metadata establishes actual handler class
+          # *names*, not integer opcode -> handler registrations.
+          import re
+          handler_files=collections.Counter()
+          for literal,count in matches.items():
+              for name in re.findall(r"/Command/(NovelCommand[A-Za-z0-9_]+)\\.cpp",literal):
+                  handler_files[name]+=count
+          print("NOVEL_HANDLER_CLASS_NAMES="+json.dumps(sorted(handler_files),ensure_ascii=True))
+          print("NOVEL_HANDLER_CLASS_COUNT="+str(len(handler_files)))
           PY
           # Only a RSA-3072 OAEP/SHA256 sealed config is logged, not clear keys.
           node -e 'const {nativeMasterConfig}=require("./tools/decode_master_data.cjs");const c=nativeMasterConfig(process.argv[1]);process.stdout.write(JSON.stringify({aes:c.key.toString("hex"),iv:c.iv.toString("hex"),numeric:c.numericKey.toString("hex")}));' "$tmpdir/original.so" | \
