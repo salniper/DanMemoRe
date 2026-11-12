@@ -701,3 +701,48 @@ still not reference authenticated.** A mirrored copy of the owner's
 same preservation collection is not an independent historical capture.
 Neither the inspected original bytes nor their decoded data were
 committed. Keep PR #1 Draft; **do not merge or claim the ZIP can import**.
+
+
+## Pinned source discovery: EU 15.1.0 ARM64 bundle (2026-11-12)
+
+Research identified a **different** APKPure release variant from the already
+pinned 32-bit-only EU APK:
+
+- Package: \`com.eu.danmemo\`, version \`15.1.0\`, versionCode \`170316722\`.
+- Original universal XAPK archive (Dec 28, 2023): **SHA-1**
+  \`37894ddb200914278a5f8780e0c6e3da2d750b7c\`, 79.4 MB as listed by
+  APKPure. The bundle is described as base \`com.eu.danmemo.apk\` and
+  \`config.arm64_v8a\` plus locale/asset splits.
+- The separate standard ARMv7 APK released Dec 31, 2023 is **not** the
+  native ARM64 target. Its independently previously verified SHA-256 is
+  \`36713f18a6e9fec3302384b8d67383b12761f782d73932cb62b31b230053c3b6\`.
+- Trusted ELF image SHA-256 remains independently pinned to
+  \`e49a8cc7991f8946365a28aebad605ce566b034826dd4b34a982ab18b38303b3\`.
+
+Public listing: https://apkpure.net/danmachi-memoria-freese/com.eu.danmemo/download
+
+The download CDN could not be reached from the current analysis environment.
+**No actual binary has been fetched or scanned in this research round.**
+The archive's published SHA-1 is a candidate fingerprint, not on its own
+sufficient proof of game-binary identity or trustworthiness.
+
+\`tools/verify_pristine_arm64_xapk.py\` adds a bounded, **read-only** source
+workflow. It first checks the XAPK fingerprint, then finds exactly one
+\`com.eu.danmemo.apk\`, one \`config.arm64_v8a.apk\` and one
+\`lib/arm64-v8a/libapp.so\` in the nested split, rejects malformed/duplicated
+and oversized contents, and verifies the library's **full SHA-256** against
+the already pinned original. Only after both independent checks may
+\`--scan\` execute the existing ELF ADR/ADRP+ADD candidate scan.
+The source archive or library are never extracted to disk or committed.
+
+Run from a repository checkout **only if that already-authenticated 15.1.0
+XAPK is available outside Git**:
+
+\`\`\`bash
+python3 tools/verify_pristine_arm64_xapk.py \
+  --xapk .work/danmemo-15.1.0-arm64.xapk --scan
+\`\`\`
+
+The output would show literal address references, **not** an authenticated
+novel-command decryptor, parser, or six-file compatibility proof. No files
+among the twelve remaining mismatches are newly accepted. The PR stays Draft.
