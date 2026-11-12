@@ -231,3 +231,90 @@ the native class-construction factory independently of source-string
 proximity, linking a specific decoded slot-2 opcode to the construction
 of a particular \`NovelCommand*\` command object before implementing
 any playback behavior.
+
+
+## 7. Verified original first-hop and second-hop function calls (2026-11-12)
+
+Following the independently pinned **EU 15.1.0** XAPK SHA-1 and native
+\`libapp.so\` SHA-256 validation, a new analyzer used the **exact
+1,424-byte CIE/FDE-covered code interval** from section 6 rather than
+merely searching string literals. Every \`BL\` destination was
+cross-checked against the real ELF executable section and, where
+available, an independent indexed CIE/FDE unwind record.
+
+### First-hop results — actual pinned native
+
+[First-hop original ELF source run](https://github.com/salniper/DanMemoRe/actions/runs/43238189679):
+
+| Metric | Verified result |
+| --- | ---: |
+| \`BL\` call sites in the original executor FDE | **33** |
+| Distinct direct call targets | **15** |
+| Targets covered by CIE/FDE and located at exact FDE starts | **10** |
+| Executable \`.plt\` linker-trampoline targets without FDE | **5** |
+| Target FDE regions containing a confirmed command-class source label | **0** |
+| Verified numeric-opcode → original handler mappings | **0** |
+
+**Correction to an incomplete interpretation:** The five targets with
+\`NO_PRECEDING_FDE\` are **all within the ELF \`.plt\` executable
+section**. They are not automatically corrupt or invalid functions.
+They are linker trampoline locations and cannot be interpreted as
+ordinary \`.text\` methods merely from absence of FDE coverage.
+
+### First-hop callee machine-code *shapes*
+
+A fresh [original ELF callee code run](https://github.com/salniper/DanMemoRe/actions/runs/43238704998)
+then inspected only the 10 verified callee unwind ranges and their
+immediate downstream \`BL\` addresses. One **9,096-byte region**
+(virtual start 33432704, end 33441800) stands out:
+
+- 2,274 4-byte AArch64 words
+- **75 \`BL\` calls to 74 distinct immediate targets**
+- 428 zero-test branches, 141 direct branches, 2 conditional branches
+- 2 indirect calls and 1 indirect branch
+- One immediate comparison with **73** (which is *not* one of the
+  25 decoded command opcodes in this owner's sample)
+
+This region may contain highly branched construction/dispatch logic,
+but neither the numeric constant 73 nor the call count independently
+proves a novel-command factory. Other verified FDE code regions had
+small immediate comparisons such as 7 and 23, but those numerical
+coincidences are **not opcode→handler evidence**.
+
+### Second-hop call graph — actual pinned native
+
+[Two-hop original ELF run](https://github.com/salniper/DanMemoRe/actions/runs/43239296367):
+
+| Metric | Verified result |
+| --- | ---: |
+| \`BL\` sites in the 10 original first-hop FDEs | **158** |
+| Unique second-hop direct-call targets | **119** |
+| Second-hop destinations with valid executable CIE/FDE | **104** |
+| Second-hop destinations without preceding FDE | **15** |
+| Second-hop destinations in whose FDE a previously identified \`NovelCommand*.cpp\` source-label reference is found | **0** |
+| Verified numeric-opcode → handler mappings | **0** |
+
+The \`NovelCommand*.cpp\` source-path matches are **heuristic source
+metadata**, not a full RTTI/vtable/symbol/constructor register-flow
+analysis. Zero source-label associations does not mean the original
+handlers are absent or that the 119 targets cannot be involved in
+their construction. In particular, optimized native classes may not
+retain their source filenames in the constructor functions.
+
+Added \`tools/inspect_native_novel_direct_callees.py\` with independent
+FDE source-gating, exact \`.text\` vs \`.plt\` section discrimination,
+one-hop code-shape classification and second-hop C++ source-label
+associations. The synthetic regression suite verifies boundaries,
+damaged CIE records, non-executable destinations, misleading C++
+metadata, counts, and **strictly disallows granting original numeric
+opcode mappings**.
+
+**Research decision:** Stop promoting class-source-name proximity into
+constructor identity. For the large 9,096-byte region and its 74
+targets, the next meaningful evidence should come from actual
+control/data-flow, relocation/vtable targets or independently
+identified native construction functions — particularly following
+the seven indirect calls in the 1,424-byte original executor FDE.
+Keep the original asset-reference MD5 guard intact: exactly
+**7/19** repaired; **12** mismatches and original device playback
+remain unverified. PR stays Draft; do not merge.
