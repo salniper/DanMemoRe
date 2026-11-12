@@ -856,3 +856,57 @@ zero direct string hits, **not** proof that the path or loader is absent.
 The six encrypted novel files have not been decrypted or authenticated
 to the source reference. **12 legacy mismatches remain blocked**. The
 launcher was not installed, imported, or run on the AYN Thor in this pass.
+
+
+## Confirmed false positives: no executable NovelCommand direct xrefs (2026-11-12)
+
+**Important correction of the preceding 4-site investigation.** A verified
+[EU 15.1.0 XAPK binary run](https://github.com/salniper/DanMemoRe/actions/runs/43190879017)
+inspected the original ARM64 ELF **section headers** as well as the
+larger \`PT_LOAD\` segment flags:
+
+- All **four** ADR arithmetic bit-pattern matches previously reported at
+  offsets 54283152, 54069236, 54086404 and 54231964 are in the ELF
+  **\`.rodata\`** section, whose \`SHF_EXECINSTR\` flag is **not** set.
+- The four literal targets are also in \`.rodata\`. A coarser \`PT_LOAD\`
+  \`PF_X\` flag included these data addresses, causing the previous
+  scanner to decode arbitrary data bytes as AArch64 instructions.
+- The original ELF has 26 section headers; 14,424 ELF symbol entries were
+  examined, with **zero symbols named with the selected
+  \`NovelCommand\` substrings**. This does not exclude stripped, internal,
+  dynamically constructed or other named loader functions.
+- These matches are **not code references** and must be excluded from
+  callable-function or data-flow assertions. The earlier count of four
+  was a false-positive count, not evidence of four real call sites.
+
+\`tools/inspect_elf_novel_xrefs.py\` now consults validated section
+headers and counts **only \`SHF_EXECINSTR\` instruction locations** when
+section headers are present. It reports rejected noncode arithmetic
+patterns separately. A missing/stripped section table retains a
+separate \`PF_X_ONLY_UNVERIFIED_NO_SECTION_HEADERS\` status: results from
+that fallback cannot substantiate genuine code references.
+Synthetic regression explicitly reproduces a \`.rodata\` pattern inside
+a \`PF_X\` segment and verifies it is refused.
+
+[Second authenticated original-client scan after the correction](https://github.com/salniper/DanMemoRe/actions/runs/43191351680):
+- \`elf_code_gate=SHF_EXECINSTR_FILTERED\`
+- \`excluded_data_adr_bit_patterns=4\`
+- \`novel_marker_address_candidates_total=0\`
+- \`native_context_site_count=0\`
+- \`novel_named_symbols=0\`
+
+This is a **negative finding for the narrowly supported direct
+ADR/adjacent-ADRP+ADD xref patterns**, not proof that the game has no
+story loader. True data references may use GOT indirection, LDR
+literals, pointer arrays, string construction or other addressing
+sequences, none of which have been fully traced.
+
+[Updated synthetic policy CI](https://github.com/salniper/DanMemoRe/actions/runs/43191351795)
+includes section parser, code-gated xrefs, device-source validation,
+and existing import security checks. No original binary or decrypted
+client content was committed.
+
+**No remaining content asset was newly authenticated.** The original
+seven phase repairs remain valid; **12/19 mismatches** still require
+reference authentication. This PR remains Draft, with no Android
+installation, original game import, gameplay acceptance or merge.
