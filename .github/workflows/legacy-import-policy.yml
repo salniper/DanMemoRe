@@ -22,6 +22,9 @@ on:
       - "tools/test_inspect_story_field_profile.cjs"
       - "tools/inspect_story_command_sequence.cjs"
       - "tools/test_inspect_story_command_sequence.cjs"
+      - "tools/verify_novel_opcode_evidence.cjs"
+      - "tools/test_verify_novel_opcode_evidence.cjs"
+      - "data/danmemore-novel-opcode-evidence.json"
       - "tools/test_inspect_story_command_compat.cjs"
       - "tools/inspect_native_novel_loader_markers.py"
       - "tools/test_inspect_native_novel_loader_markers.py"
@@ -89,6 +92,8 @@ jobs:
           node tools/test_inspect_story_flatbuffer_shape.cjs
           node tools/test_inspect_story_field_profile.cjs
           node tools/test_inspect_story_command_sequence.cjs
+          node tools/verify_novel_opcode_evidence.cjs
+          node tools/test_verify_novel_opcode_evidence.cjs
 
   native-novel-marker-tests:
     runs-on: ubuntu-24.04
