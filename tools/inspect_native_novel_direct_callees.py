@@ -138,3 +138,89 @@ def inspect_direct_callees(blob, source_references, frames, precise):
             "Indirect BLR targets and dynamic dispatch remain unresolved."
         )
     }
+
+
+# Opcode values independently observed in the owner's *six preserved*
+# novelCommand files. A matching immediate in native code is only a
+# numerical coincidence until data-flow from slot 2 to a constructor
+# is established.
+OBSERVED_STORY_CODES = frozenset(
+    (1, 4, 5, 6, 7, 10, 11, 12, 15, 16, 18, 19, 20, 22, 23, 24,
+     27, 29, 30, 32, 36, 37, 39, 40, 41)
+)
+
+
+def classify_direct_callee_code(blob, report):
+    """Inspect EXACT authenticated callee FDE ranges, no adjacent functions.
+
+    Does not decode dataflow or infer opcode dispatch; prints no client
+    instructions or decryption keys. Traces BL target *addresses* only.
+    """
+    import struct
+    from inspect_native_novel_executor_flow import _decode_control
+    from inspect_native_novel_unwind import _va_to_file, MAX_FDE_RANGE
+    if report.get("status") != "ORIGINAL_BL_CALLEE_FDE_ASSOCIATIONS_ONLY":
+        raise ValueError("call target analysis requires validated original FDE report")
+    sections = parse_sections(blob)
+    segments = elf_segments(blob)
+    signatures = {}
+    for target in report.get("callees", ()):
+        if target["fde_status"] != "VALIDATED_EXECUTABLE_CALLEE_FDE":
+            continue
+        start_va = target["unwind_start_va"]
+        stop_va = target["unwind_end_va_exclusive"]
+        key = (start_va, stop_va)
+        if key in signatures:
+            continue
+        length = stop_va - start_va
+        start_off = _va_to_file(segments, start_va)
+        section = _unique_executable_section(sections, start_va)
+        if (start_off is None or section is None or length <= 0 or
+                length > MAX_FDE_RANGE or length % 4 or
+                stop_va > section["addr"] + section["size"]):
+            raise ValueError("callee FDE cannot be decoded from original executable code")
+        comparisons = Counter()
+        classes = Counter()
+        calls = Counter()
+        for off in range(start_off, start_off + length, 4):
+            word = struct.unpack_from("<I", blob, off)[0]
+            pc = start_va + off - start_off
+            kind, value = _decode_control(word, pc)
+            if kind is None:
+                continue
+            classes[kind] += 1
+            if kind == "CMP_IMMEDIATE" and isinstance(value, int) and value <= 256:
+                comparisons[value] += 1
+            if kind == "CALL_DIRECT":
+                calls[value] += 1
+        signatures[key] = {
+            "fde_start_va": start_va,
+            "fde_end_va_exclusive": stop_va,
+            "instruction_word_count": length // 4,
+            "instruction_class_counts": dict(classes),
+            "small_immediate_cmp_histogram": dict(sorted(comparisons.items())),
+            "observed_story_opcode_values_also_present_as_cmp_immediates":
+                sorted(OBSERVED_STORY_CODES.intersection(comparisons)),
+            "unique_second_hop_direct_call_targets": len(calls),
+            "second_hop_direct_call_count": sum(calls.values()),
+            "second_hop_direct_call_sample": [
+                {"to_va": va, "calls": n}
+                for va, n in calls.most_common(24)
+            ],
+            "direct_call_samples_truncated": len(calls) > 24,
+            "actual_opcode_dispatch_proven": False,
+            "original_constructor_proven": False,
+        }
+    return {
+        "status": "ONE_HOP_ORIGINAL_FDE_CODE_SHAPES_ONLY",
+        "verified_callee_fde_regions": len(signatures),
+        "callee_regions": [signatures[key] for key in sorted(signatures)],
+        "numeric_opcode_handler_mappings_proven": 0,
+        "original_import_authorized": False,
+        "limitations": (
+            "Exact original CIE/FDE code coverage, immediate comparisons "
+            "and BL-address targets do not establish which decoded story opcode "
+            "is used or which NovelCommand handler is constructed. Register "
+            "comparisons, pointer dispatch and indirect calls require SSA/CFG."
+        ),
+    }
