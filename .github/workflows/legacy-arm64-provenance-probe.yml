@@ -49,6 +49,8 @@ jobs:
           print("ORIGINAL_ARM64_VERIFIED")
           print("pristine_native_sha256=" + report["native_sha256"])
           print("novel_marker_literal_total=" + str(sum(row["literal_hits"] for row in scan["markers"])))
+          print("elf_code_gate=" + scan["scan_scope"])
+          print("excluded_data_adr_bit_patterns=" + str(scan["excluded_noncode_arithmetic_matches"]))
           # Print only bounded code-location metadata; never original native bytes.
           for row in scan["markers"]:
               print("marker_count=" + row["marker"] + ":" + str(row["literal_hits"]))
