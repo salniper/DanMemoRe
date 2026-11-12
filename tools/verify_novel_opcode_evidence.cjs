@@ -51,7 +51,8 @@ function assertEvidence(e) {
   const perScript=e.source_evidence.canonical_script_histograms;
   if (!perScript || Object.keys(perScript).length !== CANONICAL_SCRIPTS.length)
     throw Error('Missing canonical original script distribution');
-  const perCode = new Map(), perTotal = 0;
+  const perCode = new Map();
+  let perTotal = 0;
   const perCounts = [123,342,90,246];
   for (let i=0;i<CANONICAL_SCRIPTS.length;i++) {
     const h=perScript[String(CANONICAL_SCRIPTS[i])];
