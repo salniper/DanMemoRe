@@ -19,9 +19,9 @@ def fixture():
     struct.pack_into("<I", blob, 0x100, 0xb0000000)
     struct.pack_into("<I", blob, 0x104, 0x91060000)
     names = b"\x00.text\x00.rodata\x00.shstrtab\x00.strtab\x00.symtab\x00"
-    blob[0x410:0x410 + len(names)] = names
+    blob[0x510:0x510 + len(names)] = names
     symbols = b"\x00_ZN12NovelCommand4LoadEv\x00"
-    blob[0x450:0x450 + len(symbols)] = symbols
+    blob[0x560:0x560 + len(symbols)] = symbols
     struct.pack_into("<Q", blob, 40, 0x300)
     struct.pack_into("<HHH", blob, 58, 64, 6, 3)
 
@@ -31,10 +31,10 @@ def fixture():
                          size, link, 0, 1, entsize)
     section(1, b".text", 1, 6, 0x1000, 0x100, 0x40)
     section(2, b".rodata", 1, 2, 0x2180, 0x180, 0x80)
-    section(3, b".shstrtab", 3, 0, 0, 0x410, len(names))
-    section(4, b".strtab", 3, 0, 0, 0x450, len(symbols))
-    section(5, b".symtab", 2, 0, 0, 0x500, 48, 4, 24)
-    struct.pack_into("<IBBHQQ", blob, 0x500 + 24,
+    section(3, b".shstrtab", 3, 0, 0, 0x510, len(names))
+    section(4, b".strtab", 3, 0, 0, 0x560, len(symbols))
+    section(5, b".symtab", 2, 0, 0, 0x600, 48, 4, 24)
+    struct.pack_into("<IBBHQQ", blob, 0x600 + 24,
                      1, 0x12, 0, 1, 0x1000, 32)
     return blob
 
