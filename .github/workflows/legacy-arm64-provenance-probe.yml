@@ -36,7 +36,7 @@ jobs:
           fi
 
           if ! python3 tools/verify_pristine_arm64_xapk.py \
-               --xapk "$candidate" --scan --context > "$local_dir/report.json"; then
+               --xapk "$candidate" --scan --context --sections > "$local_dir/report.json"; then
             echo "CANDIDATE_REJECTED: pinned original archive/native hashes or structure did not validate." | tee -a "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
@@ -69,6 +69,17 @@ jobs:
           code_context = report["story_code_context"]
           print("native_context_status=" + code_context["status"])
           print("native_context_site_count=" + str(code_context["candidate_site_count"]))
+          elf = report["story_elf_sections"]
+          print("elf_section_table_present=" + str(elf["section_table_present"]))
+          print("elf_section_count=" + str(elf["section_count"]))
+          sym = elf["named_symbols"]
+          print("elf_symbols_examined=" + str(sym["symbols_checked"]))
+          print("novel_named_symbols=" + str(sym["matching_symbol_count"]))
+          print("novel_named_symbol_types=" + json.dumps(sym["matching_symbol_types"], sort_keys=True))
+          for sample in sym["matching_symbol_samples"]:
+              print("novel_named_symbol_sample=" + json.dumps(sample, sort_keys=True))
+          for site in elf["candidate_locations"]:
+              print("elf_candidate_section=" + json.dumps(site, sort_keys=True))
           for site in code_context["sites"]:
               print("native_context_site=" + json.dumps({
                   "marker": site["marker"],
