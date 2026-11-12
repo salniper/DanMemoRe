@@ -103,6 +103,7 @@ def inspect_object_register_origins(blob, frame_report, precise_report, indirect
                     "recognized_writer_kind":hint["kind"],
                     "source_register":hint.get("base",hint.get("source")),
                     "source_byte_offset":hint.get("byte_offset"),
+                    "source_immediate":hint.get("immediate"),
                     "distance_in_instructions":(initial_load-off)//4,
                     "control_transfers_between_writer_and_first_load":barrier_count,
                 }
