@@ -44,6 +44,28 @@ class ElfNovelReferenceTests(unittest.TestCase):
         self.assertEqual(refs["candidate_count"], 1)
         self.assertEqual(refs["candidates"][0]["instruction_pattern"], "ADR")
 
+    def test_reference_beyond_first_forty_literals_is_not_dropped(self):
+        blob = fixture()
+        blob.extend(b"\x00" * 0x500)
+        struct.pack_into("<QQ", blob, 120 + 32, 0x500, 0x500)
+        for i in range(41):
+            at = 0x180 + 12 * i
+            blob[at:at + 12] = b"novelCommand"
+        # ADRP X0,#0x2000; ADD X0,X0,#0x360 => the 41st literal.
+        struct.pack_into("<I", blob, 0x104, 0x910d8000)
+        hit = self.novel_hit(blob)
+        self.assertEqual(hit["literal_hits"], 41)
+        self.assertEqual(hit["referenced_literal_hits"], 1)
+        self.assertEqual(hit["locations"][0]["file_offset"], 0x360)
+        self.assertEqual(hit["locations"][0]["address_references"]["candidate_count"], 1)
+        self.assertTrue(hit["truncated"])
+
+    def test_single_pass_agrees_with_single_target_helper(self):
+        blob = fixture()
+        segments = m.elf_segments(blob)
+        self.assertEqual(m.find_references_multi(blob, segments, (0x2180,))[0x2180],
+                         m.find_references(blob, segments, 0x2180))
+
     def test_literal_without_reference(self):
         blob = fixture()
         struct.pack_into("<I", blob, 0x104, 0)
