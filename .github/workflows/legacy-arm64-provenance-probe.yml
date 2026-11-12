@@ -1,0 +1,62 @@
+name: One-shot pristine EU ARM64 provenance probe
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/legacy-arm64-provenance-probe.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  original-client-source-probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch candidate once, verify two fingerprints, scan ELF literals
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          umask 077
+          local_dir="$(mktemp -d)"
+          trap 'rm -rf "$local_dir"' EXIT
+          candidate="$local_dir/pristine-original-arm64.xapk"
+
+          # Third-party source, unauthenticated until BOTH the published archive
+          # SHA-1 and independently pinned pristine ELF SHA-256 pass. The binary
+          # never leaves this job, is not uploaded and is never executed.
+          if ! curl -fLsS --retry 1 --retry-delay 2 --connect-timeout 15 \
+               --max-time 120 --max-filesize 268435456 \
+               --proto '=https' --tlsv1.2 \
+               -o "$candidate" \
+               'https://d.apkpure.net/b/XAPK/com.eu.danmemo?nc=&sv=19&versionCode=170316722'; then
+            echo "SOURCE_UNAVAILABLE: original ARM64 archive could not be fetched." | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          if ! python3 tools/verify_pristine_arm64_xapk.py \
+               --xapk "$candidate" --scan > "$local_dir/report.json"; then
+            echo "CANDIDATE_REJECTED: pinned original archive/native hashes or structure did not validate." | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          python3 - "$local_dir/report.json" <<'PY'
+          import json, sys, os
+          with open(sys.argv[1], encoding="utf-8") as source:
+              report = json.load(source)
+          scan = report["story_address_candidates"]
+          print("ORIGINAL_ARM64_VERIFIED")
+          print("pristine_native_sha256=" + report["native_sha256"])
+          print("novel_marker_literal_total=" + str(sum(row["literal_hits"] for row in scan["markers"])))
+          print("novel_marker_address_candidates_total=" + str(sum(
+              entry["address_references"]["candidate_count"]
+              for row in scan["markers"]
+              for entry in row["locations"]
+              if entry.get("address_references")
+          )))
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
+              summary.write("PINNED_ARM64_VERIFIED: pristine source binary SHA-256 matched. "
+                            "Literal references are **not** loader/decryptor proof; "
+                            "12 legacy mismatches remain blocked.\n")
+          PY
