@@ -1,0 +1,65 @@
+name: One-shot sealed original novel field-profile configuration
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/legacy-novel-schema-once.yml"
+permissions:
+  contents: read
+jobs:
+  original-native-sealed-fields:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Verify original client and seal Master AES/IV/numeric decoder keys
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          umask 077
+          tmpdir="$(mktemp -d)"
+          trap 'rm -rf "$tmpdir"' EXIT
+          cat > "$tmpdir/recipient.pem" <<'RECIPIENT'
+          -----BEGIN PUBLIC KEY-----
+          MIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEA4vPrbUqfRrOaSDpW6GLM
+          ELlP/XKUMdMhDX4jvTc3C9XuHKOcxta1GTeddZEX8p4pQ8aWuelc+3nBsKSHN91o
+          HKrkCy3tEWnSwwPb3RMrzxY0B7/T7YL117LicL/7D2ik8WTtxDsfVqz0T8UUqyp0
+          hS/6LKnsfJ17JnpbbT1MZhiePCb31cbLnmeIazVVu/R8OKQHyyMjmhMqRr83sWCZ
+          858v+ZRjGHyi74q9O5uasd+AvaIfwmV04CS2nNVigQfxXV+cLlWrckO27TBHSGi1
+          anp7slX58RYLOfCe5AJ9kOjZeXdEj0gHKxsv+WcKBrG5YsN4pcCsBkWPRONKqRGY
+          jszHsdY4cXlwMOqB3FZ7287OjxJ0V1Hqw0Xvy/K8EtVIJFkrdn9EezLBL1b3KWID
+          NPKMpTxoxtdhci1r/ktoJIQgM5al6ab3fmJ/YhAED/0vlPTv989SJwQEOk2L8R1+
+          VicPqYQjhnjoPEfKDRyzHUjnBuM5q0kqgEJHQvcHCBNlAgMBAAE=
+          -----END PUBLIC KEY-----
+          RECIPIENT
+          curl --fail --location --silent --show-error --retry 1 \
+            --connect-timeout 15 --max-time 180 --max-filesize 268435456 \
+            --proto '=https' --tlsv1.2 \
+            -o "$tmpdir/original.xapk" \
+            'https://d.apkpure.net/b/XAPK/com.eu.danmemo?nc=&sv=19&versionCode=170316722'
+          python3 - "$tmpdir/original.xapk" "$tmpdir/original.so" <<'PY'
+          import hashlib, io, pathlib, sys, zipfile
+          sys.path.insert(0, "tools")
+          from verify_pristine_arm64_xapk import inspect_xapk, ARM64_SPLIT, LIBAPP_PATH, PINNED_SHA256
+          src, dest = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
+          verified = inspect_xapk(src)
+          with zipfile.ZipFile(src) as outer:
+              split = outer.read(ARM64_SPLIT)
+          with zipfile.ZipFile(io.BytesIO(split)) as inner:
+              native = inner.read(LIBAPP_PATH)
+          assert hashlib.sha256(native).hexdigest() == PINNED_SHA256
+          dest.write_bytes(native)
+          print("AUTHENTICATED_NATIVE_SHA256=" + verified["native_sha256"])
+          PY
+          # Exactly one RSA-3072 / OAEP-SHA256 recipient. The real AES/IV
+          # and numericXXTEA key are never logged or saved to Git.
+          node -e 'const {nativeMasterConfig}=require("./tools/decode_master_data.cjs"); const c=nativeMasterConfig(process.argv[1]); process.stdout.write(JSON.stringify({aes256_key:c.key.toString("hex"),cbc_iv:c.iv.toString("hex"),numeric_key:c.numericKey.toString("hex")}));' "$tmpdir/original.so" | \
+            openssl pkeyutl -encrypt -pubin -inkey "$tmpdir/recipient.pem" \
+              -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:sha256 \
+              -out "$tmpdir/sealed.bin"
+          printf 'SEALED_NOVEL_FIELD_CONFIG_RSA_OAEP_SHA256='
+          openssl base64 -A -in "$tmpdir/sealed.bin"
+          printf '\n'
+          echo "SEALED_ONLY: No unencrypted original keys, client, private owner content or decrypted story fields were uploaded."
