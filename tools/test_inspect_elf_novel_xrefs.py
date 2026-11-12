@@ -66,6 +66,24 @@ class ElfNovelReferenceTests(unittest.TestCase):
         self.assertEqual(m.find_references_multi(blob, segments, (0x2180,))[0x2180],
                          m.find_references(blob, segments, 0x2180))
 
+    def test_nonexecuting_rodata_in_pf_x_segment_is_excluded(self):
+        # A PF_X load segment may contain a .rodata section: executing the
+        # words there is not justified, even if bits resemble valid ADR.
+        import test_inspect_native_novel_elf_sections as source
+        blob = source.fixture()
+        struct.pack_into("<I", blob, 120 + 4, 5)  # second PT_LOAD is PF_R|PF_X
+        fake_pc = 0x2180 + 0x10
+        imm = (0x2180 - fake_pc) & ((1 << 21) - 1)
+        fake_adr = 0x10000000 | ((imm & 3) << 29) | (((imm >> 2) & 0x7ffff) << 5)
+        struct.pack_into("<I", blob, 0x190, fake_adr)
+        scan = m.inspect(blob)
+        hit = next(row for row in scan["markers"] if row["marker"] == "NovelCommand")
+        refs = hit["locations"][0]["address_references"]
+        self.assertEqual(scan["scan_scope"], "SHF_EXECINSTR_FILTERED")
+        self.assertEqual(refs["candidate_count"], 1)
+        self.assertEqual(refs["excluded_noncode_count"], 1)
+        self.assertEqual(refs["candidates"][0]["instruction_file_offset"], 0x100)
+
     def test_literal_without_reference(self):
         blob = fixture()
         struct.pack_into("<I", blob, 0x104, 0)
