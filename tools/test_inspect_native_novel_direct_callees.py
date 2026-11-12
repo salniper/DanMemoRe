@@ -150,6 +150,57 @@ class OriginalDirectCalleeTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "validated original"):
             callees.classify_direct_callee_code(two_frame_fixture(), {})
 
+    def test_second_hop_cpp_label_is_candidate_not_opcode_proof(self):
+        blob = two_frame_fixture()
+        # First-hop target is 0x1080. Its BL back to original source caller
+        # at 0x1000 has only a *source-label xref*, not a symbol.
+        delta = 0x1000 - 0x1080
+        struct.pack_into("<I", blob, 0x180,
+                         0x94000000 | ((delta >> 2) & 0x03ffffff))
+        source = source_report(0x1010)
+        frames, precise = caller_reports(blob)
+        direct = callees.inspect_direct_callees(blob, source, frames, precise)
+        shapes = callees.classify_direct_callee_code(blob, direct)
+        second = callees.find_second_hop_handler_source_candidates(
+            blob, source, direct, shapes)
+        self.assertEqual(second["firsthop_fde_regions"], 1)
+        self.assertEqual(second["total_second_hop_bl_sites"], 1)
+        self.assertEqual(second["distinct_second_hop_targets"], 1)
+        self.assertEqual(second["candidate_callees_with_handler_source_cpp"], 1)
+        candidate = second["firsthop_regions"][0]["handler_source_candidates"][0]
+        self.assertEqual(candidate["called_va"], 0x1000)
+        self.assertTrue(candidate["callee_target_is_fde_entry"])
+        self.assertIn("NovelCommandTalkShow.cpp",
+                      candidate["same_fde_original_cpp_labels"][0]["handler_cpp_path"])
+        self.assertFalse(candidate["opcode_or_handler_constructor_verified"])
+        self.assertEqual(second["numeric_opcode_to_native_handler_mappings_verified"],0)
+        self.assertFalse(second["original_import_authorized"])
+
+    def test_second_hop_source_label_outside_callee_fde_rejected(self):
+        blob = two_frame_fixture()
+        delta = 0x1000 - 0x1080
+        struct.pack_into("<I", blob, 0x180,
+                         0x94000000 | ((delta >> 2) & 0x03ffffff))
+        source = source_report(0x10e0)
+        frames, precise = caller_reports(blob)
+        direct = callees.inspect_direct_callees(blob, source, frames, precise)
+        shapes = callees.classify_direct_callee_code(blob, direct)
+        second = callees.find_second_hop_handler_source_candidates(
+            blob, source, direct, shapes)
+        self.assertEqual(second["candidate_callees_with_handler_source_cpp"], 0)
+
+    def test_second_hop_bl_metadata_must_match_real_instruction_count(self):
+        blob = two_frame_fixture()
+        struct.pack_into("<I", blob, 0x180, 0x94000000) # BL self
+        source = source_report(0x1010)
+        frames, precise = caller_reports(blob)
+        direct = callees.inspect_direct_callees(blob, source, frames, precise)
+        shapes = callees.classify_direct_callee_code(blob, direct)
+        shapes["callee_regions"][0]["second_hop_direct_call_count"] = 9
+        with self.assertRaisesRegex(ValueError, "disagrees"):
+            callees.find_second_hop_handler_source_candidates(
+                blob, source, direct, shapes)
+
     def test_unverified_mapping_only_metadata(self):
         blob = two_frame_fixture()
         frames, precise = caller_reports(blob)
