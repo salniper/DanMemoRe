@@ -21,6 +21,8 @@ on:
       - "tools/test_inspect_native_novel_loader_markers.py"
       - "tools/inspect_elf_novel_xrefs.py"
       - "tools/test_inspect_elf_novel_xrefs.py"
+      - "tools/verify_remaining_legacy_candidates.py"
+      - "tools/test_verify_remaining_legacy_candidates.py"
       - "tools/test_inspect_master_source_provenance.py"
       - "android/danmemore-launcher/app/src/main/kotlin/dev/danmemore/launcher/LegacyImportPolicy.kt"
 
@@ -83,6 +85,14 @@ jobs:
       - uses: actions/checkout@v4
       - name: Verify synthetic ELF segment and AArch64 references
         run: python3 -m unittest discover -s tools -p 'test_inspect_elf_novel_xrefs.py' -v
+
+  residual-candidate-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify candidate audit fail-closed controls
+        run: python3 -m unittest discover -s tools -p 'test_verify_remaining_legacy_candidates.py' -v
 
   master-provenance:
     runs-on: ubuntu-24.04
