@@ -521,3 +521,48 @@ client. Afterward, separately check the six observed encrypted bytes
 against that verified chain, with schema/semantic validation and the
 reference MD5 barrier kept intact. No AYN Thor install or import is
 justified by this scan alone.
+
+
+## Native ELF64 AArch64 cross-reference candidates (2026-11-12)
+
+Added `tools/inspect_elf_novel_xrefs.py`, with six synthetic ELF
+regression tests, extending the simple literal scan into **bounded
+static candidate discovery**:
+
+1. Verify the existing pinned pristine 15.1.0 ARM64 image SHA-256
+   before reading/processing it.
+2. Parse little-endian ELF64 AArch64 `PT_LOAD` program headers.
+   Map literal file offsets to unique virtual addresses.
+3. In executable load segments, look only for **adjacent** ADRP+ADD
+   instruction pairs that compute a literal's mapped address.
+4. Report bounded candidate instruction file offsets and virtual
+   addresses, never the original binary bytes or cryptographic material.
+
+This is deliberately conservative and incomplete: compilers can use
+indirect data references, GOT relocations, register moves or other
+address-construction sequences, and a candidate ADRP+ADD does not
+identify a function, runtime invocation, parser or decryption routine.
+Absence of a match is not negative compatibility evidence.
+
+Six synthetic tests passed locally for valid mapping/reference,
+unreferenced literal, wrong architecture, malformed program-header
+bounds, malformed load segment and unmapped literal. The CI job is
+configured but has **not** yet been confirmed green for the latest
+GitHub branch.
+
+No actual original 15.1.0 ARM64 binary was available in the analysis
+environment for scanning. **There are no verified native story loader
+addresses or genuine six-file decode results at this point.**
+No source data, import policy, APK installation or main branch changes.
+
+Usage on a pre-existing isolated research checkout:
+```bash
+python3 tools/inspect_elf_novel_xrefs.py \
+  --binary /path/to/pristine_15.1.0_arm64.so
+```
+
+Next gate: inspect candidate code using an actual ARM64 disassembler,
+tracing its string-building/file-open and decrypt/decompress calls
+through the real native loader. Only after the complete call chain is
+verified should the six observed novel command files be tested against
+the verified decoder and schema. Reference MD5 restrictions remain.
