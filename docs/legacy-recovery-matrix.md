@@ -426,3 +426,35 @@ project asset totals.
   storage exists, and a disposable save is used.
 - **Do not claim full offline play** after a successful login or title screen;
   story, battle, gacha and persistence require separate verification.
+
+
+## Six encrypted story commands: bounded read-only decoder probe (2026-11-12)
+
+New diagnostic: `tools/inspect_story_command_compat.cjs`; synthetic checks:
+`tools/test_inspect_story_command_compat.cjs`.
+
+- It requires the six exact `novelCommand*.enc` audit entries, rehashes
+  each source against the audit, rejects symlinked paths, and reports SHA-256.
+- With no original client binary, it makes **no** decryption claim.
+- Optionally, with the independently SHA-256-pinned pristine 15.1.0 ARM64
+  image, it uses the existing native-derived master AES-256-CBC/zlib
+  decoder as a **hypothesis probe**, not a demonstrated story loader.
+- It never writes decrypted bytes or original assets. Success at inflate
+  establishes only compatibility with that candidate cipher/decompression
+  path; it does not prove story command schema, semantic correctness,
+  reference MD5, runtime acceptance or import eligibility.
+- All six remain `UNVERIFIED_DO_NOT_IMPORT` regardless of probe outcome.
+  There is no run against the user's six actual command bytes here.
+
+Example on a **separate offline research checkout**, not the AYN Thor:
+```bash
+node tools/inspect_story_command_compat.cjs \
+  --audit /path/to/danmemore_legacy_audit.json \
+  --contents /path/to/extracted/contents
+# Optional only if the pristine 15.1.0 ARM64 image is already locally available:
+#   --native-binary /path/to/original/arm64.so
+```
+
+Next proof gate: identify the native novel-command loader and actual decoded
+schema; cross-check with an independently archived compatible EU asset version.
+Do not infer these six are authenticated from AES/zlib probe success.
