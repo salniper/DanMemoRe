@@ -17,6 +17,8 @@ on:
       - "tools/inspect_master_source_provenance.py"
       - "tools/inspect_story_command_compat.cjs"
       - "tools/test_inspect_story_command_compat.cjs"
+      - "tools/inspect_native_novel_loader_markers.py"
+      - "tools/test_inspect_native_novel_loader_markers.py"
       - "tools/test_inspect_master_source_provenance.py"
       - "android/danmemore-launcher/app/src/main/kotlin/dev/danmemore/launcher/LegacyImportPolicy.kt"
 
@@ -63,6 +65,14 @@ jobs:
           node-version: "24"
       - name: Run synthetic fail-closed story command checks
         run: node tools/test_inspect_story_command_compat.cjs
+
+  native-novel-marker-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run synthetic native marker scanner tests
+        run: python3 -m unittest discover -s tools -p 'test_inspect_native_novel_loader_markers.py' -v
 
   master-provenance:
     runs-on: ubuntu-24.04
