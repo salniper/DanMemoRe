@@ -74,7 +74,7 @@ jobs:
           import re
           handler_files=collections.Counter()
           for literal,count in matches.items():
-              for name in re.findall(r"/Command/(NovelCommand[A-Za-z0-9_]+)\\.cpp",literal):
+              for name in re.findall(r"/Command/(NovelCommand[A-Za-z0-9_]+)\.cpp",literal):
                   handler_files[name]+=count
           print("NOVEL_HANDLER_CLASS_NAMES="+json.dumps(sorted(handler_files),ensure_ascii=True))
           print("NOVEL_HANDLER_CLASS_COUNT="+str(len(handler_files)))
