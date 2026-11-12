@@ -97,3 +97,65 @@ No original decrypted story text is committed or logged.
 
 **No progress in this document relaxes the importer reference MD5
 gate. PR #1 stays Draft and \`main\` remains untouched.**
+
+
+## 5. Original .text source-anchored instruction references (2026-11-12)
+
+The first direct string-reference scanner was a false-positive on
+\`.rodata\`: none of the four apparent \`ADR\` sites were executable code.
+This round replaces that with a fresh **source-label START-address** scan
+restricted to original \`SHF_EXECINSTR\` sections, using signed AArch64
+\`ADR\` and \`ADRP ... ADD\` arithmetic (maximum 12-instruction gap).
+It **requires BOTH** the original XAPK SHA-1 and the SHA-256-pinned
+EU 15.1.0 native \`libapp.so\` before inspecting any code.
+
+[Actual original-client .text scan](https://github.com/salniper/DanMemoRe/actions/runs/43218408459):
+**60** original C++ source-path / function-name labels have at least
+one **possible executable instruction reference**, with **185** candidate
+sites in total. These are actual \`.text\` instruction encodings and
+not the four earlier \`.rodata\` bit-pattern matches. However, the
+scanner is deliberately *not* a complete ARM64 register-value analysis;
+the nonadjacent \`ADRP + ADD\` results remain **candidates** and should
+not be called resolved call sites.
+
+There are **six** .text candidate instruction sites targeting the original
+\`NovelCommandExecuter.cpp\` source path or the
+\`NovelCommandExecuter::createNovel(...)\` pretty-function name:
+
+| ELF code offset (file/VA) | Original target metadata |
+| ---: | --- |
+| 33417776 / \`0x1FDEA30\` | \`NovelCommandExecuter.cpp\` |
+| 33418232 / \`0x1FDEBF8\` | \`NovelCommandExecuter.cpp\` |
+| 33418460 / \`0x1FDECDC\` | \`NovelCommandExecuter.cpp\` |
+| 33418464 / \`0x1FDECE0\` | \`NovelCommandExecuter::createNovel(...)\` |
+| 33418496 / \`0x1FDED00\` | \`NovelCommandExecuter.cpp\` |
+| 33418500 / \`0x1FDED04\` | \`NovelCommandExecuter::createNovel(...)\` |
+
+[Source-anchored bounded code-neighborhood run](https://github.com/salniper/DanMemoRe/actions/runs/43219302678)
+checked ±4 KiB around each of these six instruction locations,
+classifying nearby direct/indirect branches, calls, returns and immediate
+comparisons *without exporting original code bytes*. It found many
+branches and calls, including conditional comparisons for small
+immediates such as 31, 34 and 44 in overlapping windows. **These
+numbers are not opcode mappings.** Window overlap means event counts
+cannot be added across six anchors, and a nearby comparison may be
+unrelated to the actual command factory.
+
+New tools:
+- \`tools/inspect_native_novel_dispatch_seeds.py\`: source-start literal
+  targets + executable-section direct/nonadjacent address candidates;
+- \`tools/inspect_native_novel_executor_flow.py\`: source-anchored
+  bounded control-flow instruction-class summaries;
+- \`tools/probe_pristine_novel_dispatch.py\`: double-fingerprint-gated
+  ephemeral XAPK analysis reporting metadata only;
+- corresponding synthetic code-section, indirect-registration boundary,
+  source-string and instruction-class regression tests. No actual
+  game binary, original script text or decryption material is in Git.
+
+**Next proof needed:** identify an independently validated exact
+\`createNovel\` function boundary and its factory/dispatcher control
+flow. Trace a **specific numeric slot-2 command value through a
+verified constructor target** before filling any
+\`verified_native_handler\`. The mapping stays **0/25**; no new asset
+has matched required reference MD5 and no scene has run on AYN Thor.
+This is reverse engineering evidence, **not** an import waiver.
