@@ -98,6 +98,26 @@ jobs:
           print("original_unwind_fde_index_entries=" + str(unwind["fde_index_entries"]))
           print("original_executor_unwind_covered_anchors=" +
                 str(unwind["exact_fde_coverage_count"]))
+          indirect=report["original_executor_indirect_calls"]
+          print("original_executor_indirect_BLR_sites="+
+                str(indirect["original_blr_call_sites"]))
+          print("original_executor_indirect_BLR_writer_kinds="+
+                json.dumps(indirect["call_target_nearest_writer_kinds"],sort_keys=True))
+          print("original_executor_proven_vtable_targets="+
+                str(indirect["verified_vtable_targets"]))
+          print("original_executor_indirect_opcode_handler_links="+
+                str(indirect["verified_numeric_opcode_handler_mappings"]))
+          for item in indirect["sites"]:
+              print("original_executor_BLR_target_provenance="+json.dumps({
+                  "call_va":item["call_instruction_va"],
+                  "target_register":item["call_target_register"],
+                  "writer_kind":item["nearest_writer_kind"],
+                  "writer_at":item.get("nearest_writer_file_offset"),
+                  "writer_source_register":item.get("nearest_writer_source_register"),
+                  "writer_byte_offset":item.get("nearest_writer_byte_offset"),
+                  "control_barriers":item["preceding_control_transfers_since_writer"],
+                  "reaching_definition_validated":False,
+              },sort_keys=True))
           exact_region=report["original_executor_cfi_region_code"]
           print("original_executor_unique_fde_regions=" +
                 str(exact_region["distinct_verified_unwind_regions"]))
