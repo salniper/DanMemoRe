@@ -15,6 +15,8 @@ on:
       - "tools/prepare_legacy_recovery_overlay.py"
       - "tools/test_prepare_legacy_recovery_overlay.py"
       - "tools/inspect_master_source_provenance.py"
+      - "tools/inspect_story_command_compat.cjs"
+      - "tools/test_inspect_story_command_compat.cjs"
       - "tools/test_inspect_master_source_provenance.py"
       - "android/danmemore-launcher/app/src/main/kotlin/dev/danmemore/launcher/LegacyImportPolicy.kt"
 
@@ -50,6 +52,17 @@ jobs:
           python3 -m unittest discover -s tools -p 'test_inspect_legacy_mismatches.py' -v
           python3 -m unittest discover -s tools -p 'test_repair_verified_phase_manifests.py' -v
           python3 -m unittest discover -s tools -p 'test_prepare_legacy_recovery_overlay.py' -v
+
+  story-command-diagnostic-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Run synthetic fail-closed story command checks
+        run: node tools/test_inspect_story_command_compat.cjs
 
   master-provenance:
     runs-on: ubuntu-24.04
