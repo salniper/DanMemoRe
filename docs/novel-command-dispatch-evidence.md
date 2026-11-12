@@ -383,3 +383,61 @@ before registering any of the 25 opcode handlers.
 **No opcode-to-handler mapping was authorized (0/25); no playback
 implemented; reference MD5 import blockers remain 12/19.** PR #1
 continues as Draft with \`main\` and owner backups untouched.
+
+
+## 9. Backward object-register provenance for all seven original BLR calls (2026-11-13)
+
+A further SHA-1-authenticated EU 15.1.0 XAPK and SHA-256-pinned
+\`libapp.so\` run examined **the existing exact original 1,424-byte FDE
+range**. Following the seven confirmed ARM64 call patterns
+\`LDR X8,[Xobject,#0]; LDR X8,[X8,#16]; BLR X8\`, a bounded, whitelisted
+backward scan located the closest **syntactically recognized**
+assignments to each \`Xobject\`.
+
+[Actual original ELF source-register analysis](https://github.com/salniper/DanMemoRe/actions/runs/43275695881):
+
+| Indirect BLR VA | Immediate object register | Nearest recognized earlier assignment | Intervening control-transfer encodings |
+| ---: | --- | --- | ---: |
+| 33417672 | X24 | \`LDR X24,[SP,#64]\` | 3 |
+| 33418048 | X20 | \`MOV X20,X1\` | 37 |
+| 33418076 | X24 | \`LDR X24,[SP,#80]\` | 9 |
+| 33418388 | X19 | \`LDR X19,[SP,#120]\` | 3 |
+| 33418712 | X21 | \`LDR X21,[SP,#64]\` | 3 |
+| 33418764 | X20 | \`ADD X20,SP,#imm\` (offset logged separately) | 45 |
+| 33418828 | X20 | \`LDR X20,[SP,#120]\` | 3 |
+
+In total, **5** backwards matches are pointer loads from SP,
+**1** is a move from X1, and **1** computes an SP-relative address.
+The frame-local offsets and incoming argument are useful candidates for
+future original object-lifetime investigation, but do **not** prove
+what pointer or object is held at runtime.
+
+**Critical limitation:** all seven source-register candidates have
+multiple recognized intervening control-transfer instructions
+(**3–45**). This backward pass has **no complete control-flow
+graph (CFG), memory state, reaching-definition proof, clobber
+tracking, alias analysis, or runtime register snapshots**.
+The nearest *recognized* assignment may occur on a path that
+does not execute at the call site, or a different unrecognized
+instruction may have overwritten that register. Therefore:
+
+- **Seven syntactic assignments found ≠ seven proven object identities.**
+- **Zero vtable address points or concrete method targets verified.**
+- **Zero of 25 numeric opcode→handler assignments verified.**
+- No original user data, decoded dialogue, native binary bytes or
+  crypto keys were committed; no reference-MD5 import gate bypass.
+
+The new
+[\`tools/inspect_native_novel_object_registers.py\`](../tools/inspect_native_novel_object_registers.py)
+verifies the source BLR instruction, first object-pointer load,
+exact executable FDE coverage and call counts before offering
+metadata-only nearest-writer observations. Synthetic tests reject
+changed BLR registers, fake original FDEs, mismatched first loads,
+unsupported register writers and forged call counts.
+
+**Next proof needed:** a proper path-sensitive ARM64 CFG/SSA analysis
+for X19/X20/X21/X24, including stack-slot definitions, or a
+disposable isolated original-client runtime trace of actual
+object and vtable values. Do not turn these register guesses into
+original gameplay logic. Original 12 reference-mismatched files
+remain blocked and PR stays Draft.
