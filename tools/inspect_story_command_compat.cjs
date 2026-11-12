@@ -8,6 +8,7 @@ const { nativeMasterConfig, decodeFile } = require('./decode_master_data.cjs');
 
 const IDS = ['751040548','751040550','751040806','751040815','751041273','751041275'];
 const PREFIX = '1/master/divide_novel_command_enc/';
+const MAX_STORY_BYTES = 16 * 1024 * 1024; // hard bound for forensic input, not a game format assertion
 const sha256 = b => crypto.createHash('sha256').update(b).digest('hex');
 const md5 = b => crypto.createHash('md5').update(b).digest('hex');
 const hex = (v, n) => typeof v === 'string' && new RegExp('^[a-f0-9]{'+n+'}$').test(v);
@@ -40,9 +41,12 @@ function inspect(audit, contents, image) {
         entry.reference_md5 !== entry.historical_md5 ||
         entry.actual_md5 === entry.reference_md5 ||
         !Number.isSafeInteger(entry.actual_size) || entry.actual_size <= 0 ||
+        entry.actual_size > MAX_STORY_BYTES ||
         entry.reference_size !== entry.actual_size || entry.historical_size !== entry.actual_size)
       throw Error('invalid audit fingerprints: ' + name);
-    const data = fs.readFileSync(checkPath(contents, entry.path));
+    const source = checkPath(contents, entry.path);
+    if (fs.statSync(source).size > MAX_STORY_BYTES) throw Error('story file exceeds diagnostic limit: ' + name);
+    const data = fs.readFileSync(source);
     const stable = data.length === entry.actual_size && md5(data) === entry.actual_md5;
     const row = { path: entry.path, sha256: sha256(data),
       audit_recheck: stable ? 'MATCH' : 'CHANGED_SINCE_AUDIT',
