@@ -35,11 +35,16 @@ try {
   assert.throws(()=>inspect({issues:issues.slice(1)},contents),/exactly six/);
   assert.throws(()=>inspect({issues:[...issues.slice(0,5),issues[0]]},contents),/duplicate/);
   assert.throws(()=>inspect({issues:issues.map((x,i)=>i===0?{...x,reference_md5:'x'}:x)},contents),/invalid audit fingerprints/);
+  assert.throws(()=>inspect({issues:issues.map((x,i)=>i===0?{...x,actual_size:17*1024*1024,reference_size:17*1024*1024,historical_size:17*1024*1024}:x)},contents),/invalid audit fingerprints/);
+  const overlong = path.join(contents,issues[0].path);
+  fs.writeFileSync(overlong,Buffer.alloc(16*1024*1024+1));
+  assert.throws(()=>inspect(audit,contents),/exceeds diagnostic limit/);
+  fs.writeFileSync(overlong,before[0]);
   const target=path.join(contents,issues[0].path);
   fs.unlinkSync(target);
   fs.symlinkSync(path.join(contents,issues[1].path),target);
   assert.throws(()=>inspect(audit,contents),/symlink refused/);
-  console.log('Story command read-only diagnostics: 7 checks PASS (synthetic only)');
+  console.log('Story command read-only diagnostics: 9 checks PASS (synthetic only)');
 } finally {
   fs.rmSync(root,{recursive:true,force:true});
 }
