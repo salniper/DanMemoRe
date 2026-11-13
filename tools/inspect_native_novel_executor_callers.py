@@ -123,7 +123,37 @@ def inspect_direct_original_executor_callers(blob, frames):
             if writer.get("kind")!="COPY_REGISTER" or not isinstance(source_reg,int) or not 0<=source_reg<=30:
                 continue
             prior=_first_writers_on_cfg_paths(blob,start_off,graph,i,source_reg)
+            # The two original verified call paths contain an LDR/ADD
+            # fed by X20. Inspect only those independently decoded
+            # register-writer candidates and their CFG predecessors.
+            # This does not establish object identity or real runtime values.
+            x20_sources=[]
+            for j,previous in prior["first_writers"][:MAX_WRITERS_PER_SITE]:
+                source20=previous.get("source",previous.get("base"))
+                if (source20!=20 or previous.get("kind") not in
+                        ("LOAD_POINTER_FROM_REGISTER","ADD_REGISTER_IMMEDIATE")):
+                    continue
+                x20=_first_writers_on_cfg_paths(blob,start_off,graph,j,20)
+                x20_sources.append({
+                    "consumer_va":a+j*4,
+                    "consumer_kind":previous["kind"],
+                    "consumer_byte_offset":previous.get("byte_offset"),
+                    "consumer_immediate":previous.get("immediate"),
+                    "recognized_X20_first_writers":[{
+                        "writer_va":a+k*4,
+                        "kind":p["kind"],
+                        "source_register":p.get("source",p.get("base")),
+                        "byte_offset":p.get("byte_offset"),
+                        "immediate":p.get("immediate"),
+                    } for k,p in x20["first_writers"][:MAX_WRITERS_PER_SITE]],
+                    "more_X20_writers_not_displayed":
+                        len(x20["first_writers"])>MAX_WRITERS_PER_SITE,
+                    "entry_without_recognized_X20_writer":
+                        x20["reached_entry_without_recognized_writer"],
+                    "runtime_X20_identity_verified":False,
+                })
             secondary.append({
+                "X20_source_candidates_for_direct_consumer":x20_sources,
                 "X1_copy_va":a+i*4,
                 "copied_from_register":source_reg,
                 "prior_register_writers":[{
