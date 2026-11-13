@@ -98,6 +98,21 @@ jobs:
           print("original_unwind_fde_index_entries=" + str(unwind["fde_index_entries"]))
           print("original_executor_unwind_covered_anchors=" +
                 str(unwind["exact_fde_coverage_count"]))
+          store_paths=report["original_executor_stack_store_paths"]
+          print("original_novel_stack_path_queries="+str(store_paths["query_count"]))
+          print("original_novel_stack_path_unclobbered_candidates="+
+                str(store_paths["stores_with_modeled_unclobbered_suffix"]))
+          print("original_novel_stack_path_verified_vtables="+
+                str(store_paths["confirmed_vtable_targets"]))
+          for item in store_paths["source_paths"]:
+              if item["stores"]:
+                  print("original_novel_stack_store_path_sources="+json.dumps({
+                      "call_va":item["call_va"],
+                      "load_va":item["source_load_va"],
+                      "normalized_slot":item["normalized_sp_offset"],
+                      "stores":item["stores"],
+                      "runtime_values_proven":False,
+                  },sort_keys=True))
           stack=report["original_executor_stack_store_sources"]
           print("original_executor_stack_queries="+str(stack["stack_slot_queries"]))
           print("original_executor_stack_queries_with_stores="+
