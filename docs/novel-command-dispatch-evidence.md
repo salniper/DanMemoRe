@@ -734,3 +734,51 @@ The importer still blocks the **12** remaining reference
 MD5 mismatches (7/19 repaired). PR #1 remains Draft; never
 merge or modify \`main\` or owner's original archives based
 on this evidence.
+
+
+
+## 14. Both original executor caller X20 registers trace to local X0 (2026-11-13)
+
+This pass used the authenticated EU 15.1.0 XAPK SHA-1 and
+pinned ARM64 \`libapp.so\` SHA-256, cross-referencing each of
+the **two original executable BL calls** to the same independently
+validated executor-source CIE/FDE start, then expanding the
+previous one-hop \`X1\` source report by **one restricted CFG
+register-definition step**.
+
+[Actual original-client X20 predecessor evidence](https://github.com/salniper/DanMemoRe/actions/runs/43378926644):
+
+| External original BL | Pre-call X1 source | Direct consumer of X20 | Recognized preceding X20 writer |
+| ---: | --- | --- | --- |
+| 29888244 | \`MOV X1,X0\` at 29888060 | \`LDR X0,[X20,#1264]\` at 29888032 | **\`MOV X20,X0\` at 29887868** |
+| 33335336 | \`MOV X1,X22\` at 33335332 | \`ADD X22,X20,#16\` at 33335328 | **\`MOV X20,X0\` at 33335160** |
+
+Each writer is the modeled **first recognized X20 definition**
+found on predecessor paths within its own separately validated
+original caller FDE. The first chain reads an unknown field at
+X20+1264, while the second constructs the **address** X20+16.
+Neither calculation implies that the two callers share a
+concrete X0 object, nor that it is necessarily a \`NovelCommand\`
+instance. The actual X0 contents at each entry, unrecognized
+register writes and memory aliasing remain unverified.
+
+Updated
+[\`tools/inspect_native_novel_executor_callers.py\`](../tools/inspect_native_novel_executor_callers.py)
+to record the validated LDR/ADD consumer and modeled X20
+first-writer set; added **three synthetic regressions** covering
+both original-shaped address chains and no recognizable writer.
+The original game binary, private script bytes and cryptographic
+material were not emitted or committed.
+
+**Current safety boundary:** no original runtime object pointer,
+vtable method target, numeric opcode-to-handler mapping (**0/25**),
+reference MD5 waiver, or AYN Thor playable scene is established.
+The 12 original archive reference mismatches remain blocked;
+PR #1 stays Draft, \`main\` untouched.
+
+**Next proof sought:** identify whether the X0 value at either
+independently validated caller FDE is an incoming object parameter,
+a prior local register definition or an opaque pointer. Follow
+actual external caller edges or validated native object
+constructor ownership, rather than treating all X0 uses as the
+same object.
