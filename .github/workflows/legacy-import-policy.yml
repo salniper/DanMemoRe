@@ -59,6 +59,8 @@ on:
       - "tools/test_audit_original_xapk_asset_candidates.py"
       - "tools/audit_original_xapk_bootstrap33.py"
       - "tools/test_audit_original_xapk_bootstrap33.py"
+      - "tools/stage_original_xapk_bootstrap33.py"
+      - "tools/test_stage_original_xapk_bootstrap33.py"
       - "data/legacy-bootstrap-reference-33.json"
       - "tools/verify_story_payload_with_xapk.py"
       - "tools/test_verify_story_payload_with_xapk.py"
@@ -190,6 +192,7 @@ jobs:
         run: |
           python3 -m unittest discover -s tools -p 'test_audit_original_xapk_asset_candidates.py' -v
           python3 -m unittest discover -s tools -p 'test_audit_original_xapk_bootstrap33.py' -v
+          python3 -m unittest discover -s tools -p 'test_stage_original_xapk_bootstrap33.py' -v
 
   residual-candidate-tests:
     runs-on: ubuntu-24.04
