@@ -114,6 +114,31 @@ def inspect_direct_original_executor_callers(blob, frames):
         record["more_X1_writers_not_displayed"]=len(sources["first_writers"])>MAX_WRITERS_PER_SITE
         record["entry_path_without_recognized_X1_writer"]=sources[
             "reached_entry_without_recognized_writer"]
+        # Exactly one additional syntactic copy-source hop. An incoming
+        # argument register without an earlier recognized write remains
+        # an unknown original parameter, not a concrete game object.
+        secondary=[]
+        for i,writer in sources["first_writers"][:MAX_WRITERS_PER_SITE]:
+            source_reg=writer.get("source")
+            if writer.get("kind")!="COPY_REGISTER" or not isinstance(source_reg,int) or not 0<=source_reg<=30:
+                continue
+            prior=_first_writers_on_cfg_paths(blob,start_off,graph,i,source_reg)
+            secondary.append({
+                "X1_copy_va":a+i*4,
+                "copied_from_register":source_reg,
+                "prior_register_writers":[{
+                    "writer_va":a+j*4,"kind":w["kind"],
+                    "source_register":w.get("source",w.get("base")),
+                    "byte_offset":w.get("byte_offset"),
+                    "immediate":w.get("immediate"),
+                } for j,w in prior["first_writers"][:MAX_WRITERS_PER_SITE]],
+                "more_prior_writers_not_displayed":
+                    len(prior["first_writers"])>MAX_WRITERS_PER_SITE,
+                "possible_incoming_argument_without_prior_writer":
+                    prior["reached_entry_without_recognized_writer"],
+                "actual_register_value_verified":False,
+            })
+        record["copied_X1_source_register_traces"]=secondary
         candidates.append(record)
     return {
         "status":"ORIGINAL_EXECUTOR_FDE_DIRECT_CALLER_X1_SYNTAX_ONLY",
