@@ -66,6 +66,64 @@ class OriginalExecutorCallerTests(unittest.TestCase):
         self.assertFalse(trace["actual_register_value_verified"])
         self.assertEqual(result["original_opcode_handler_mappings_verified"],0)
 
+    def test_X20_from_incoming_X0_feeds_original_memory_field_consumer(self):
+        binary,frames=fixture()
+        # X20 <- X0; X0 <- [X20,#1264]; X1 <- X0; BL executor FDE.
+        struct.pack_into("<I",binary,0x180,0xaa0003f4)
+        ldr=0xf9400000 | ((1264//8)<<10) | (20<<5) | 0
+        struct.pack_into("<I",binary,0x184,ldr)
+        struct.pack_into("<I",binary,0x188,0xaa0003e1)
+        delta=0x1000-0x108c
+        struct.pack_into("<I",binary,0x18c,
+                         0x94000000 | ((delta>>2)&0x3ffffff))
+        result=callers.inspect_direct_original_executor_callers(binary,frames)
+        rows=result["candidate_callers"]
+        self.assertEqual(len(rows),1)
+        prior=rows[0]["copied_X1_source_register_traces"][0]
+        ref=prior["X20_source_candidates_for_direct_consumer"][0]
+        self.assertEqual(ref["consumer_va"],0x1084)
+        self.assertEqual(ref["consumer_kind"],"LOAD_POINTER_FROM_REGISTER")
+        self.assertEqual(ref["consumer_byte_offset"],1264)
+        self.assertEqual(ref["recognized_X20_first_writers"],[{
+            "writer_va":0x1080,"kind":"COPY_REGISTER","source_register":0,
+            "byte_offset":None,"immediate":None,
+        }])
+        self.assertFalse(ref["runtime_X20_identity_verified"])
+        self.assertEqual(result["original_opcode_handler_mappings_verified"],0)
+
+    def test_X20_feeds_address_calc_X22_then_X1_no_pointer_guess(self):
+        binary,frames=fixture()
+        struct.pack_into("<I",binary,0x180,0xaa0003f4) # MOV X20,X0
+        add_x22=0x91000000 | (16<<10) | (20<<5) | 22
+        struct.pack_into("<I",binary,0x184,add_x22)
+        struct.pack_into("<I",binary,0x188,0xaa1603e1) # MOV X1,X22
+        delta=0x1000-0x108c
+        struct.pack_into("<I",binary,0x18c,
+                         0x94000000 | ((delta>>2)&0x3ffffff))
+        result=callers.inspect_direct_original_executor_callers(binary,frames)
+        trace=result["candidate_callers"][0]["copied_X1_source_register_traces"][0]
+        ref=trace["X20_source_candidates_for_direct_consumer"][0]
+        self.assertEqual(ref["consumer_kind"],"ADD_REGISTER_IMMEDIATE")
+        self.assertEqual(ref["consumer_immediate"],16)
+        self.assertEqual(ref["recognized_X20_first_writers"][0]["writer_va"],0x1080)
+        self.assertFalse(ref["runtime_X20_identity_verified"])
+
+    def test_no_known_X20_writer_is_unknown_not_runtime_pointer(self):
+        binary,frames=fixture()
+        struct.pack_into("<I",binary,0x180,0xd503201f) # no X20 writer
+        struct.pack_into("<I",binary,0x184,
+                         0x91000000 | (16<<10) | (20<<5) | 22)
+        struct.pack_into("<I",binary,0x188,0xaa1603e1)
+        delta=0x1000-0x108c
+        struct.pack_into("<I",binary,0x18c,
+                         0x94000000 | ((delta>>2)&0x3ffffff))
+        result=callers.inspect_direct_original_executor_callers(binary,frames)
+        ref=result["candidate_callers"][0]["copied_X1_source_register_traces"][0][
+            "X20_source_candidates_for_direct_consumer"][0]
+        self.assertEqual(ref["recognized_X20_first_writers"],[])
+        self.assertTrue(ref["entry_without_recognized_X20_writer"])
+        self.assertFalse(result["original_X1_runtime_object_verified"])
+
     def test_original_tail_branch_is_not_called_verified_Cpp_method(self):
         binary,frames=fixture("B")
         report=callers.inspect_direct_original_executor_callers(binary,frames)
