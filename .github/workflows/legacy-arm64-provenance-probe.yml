@@ -98,6 +98,26 @@ jobs:
           print("original_unwind_fde_index_entries=" + str(unwind["fde_index_entries"]))
           print("original_executor_unwind_covered_anchors=" +
                 str(unwind["exact_fde_coverage_count"]))
+          cfg=report["original_executor_cfg_object_paths"]
+          print("original_executor_cfg_call_sites="+str(cfg["call_sites_checked"]))
+          print("original_executor_cfg_linear_candidates_refuted="+
+                str(cfg["linear_nearest_writers_refuted_by_cfg"]))
+          print("original_executor_cfg_entry_reachable_words="+
+                json.dumps(cfg["cfg_entry_reachable_words"],sort_keys=True))
+          print("original_executor_cfg_vtable_values_verified="+
+                str(cfg["original_vtable_pointer_values_verified"]))
+          for row in cfg["source_register_paths"]:
+              print("original_executor_cfg_reaching_writer="+json.dumps({
+                  "call_va":row["call_va"],"source_register":row.get("source_object_register"),
+                  "status":row["status"],
+                  "cfg_entry_reaches_call":row.get("cfg_entry_reaches_call"),
+                  "linear_nearest_writer_va":row.get("linear_nearest_writer_va"),
+                  "linear_writer_reachable":row.get("linear_nearest_writer_is_cfg_first_reaching_candidate"),
+                  "cfg_reaching_writer_count":row["cfg_reaching_writer_count"],
+                  "cfg_entry_without_writer":row.get("cfg_entry_path_without_recognized_writer"),
+                  "recognized_writer_candidates":row["reaching_writer_samples"],
+                  "object_type_proven":False,
+              },sort_keys=True))
           objects=report["original_executor_object_register_origins"]
           print("original_executor_object_origin_sites="+
                 str(objects["indirect_call_count"]))
