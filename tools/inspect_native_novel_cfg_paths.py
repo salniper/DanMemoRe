@@ -85,7 +85,11 @@ def _first_writers_on_cfg_paths(blob, start_off, graph, target_index, register):
     if target_index <= 0 or not 0 <= register <= 30:
         return {"first_writers": [], "reached_entry_without_recognized_writer": True,
                 "backward_visited_instructions": 0}
-    pending = list(graph["predecessor"][target_index])
+    reachable = graph["entry_reachable_indices"]
+    if target_index not in reachable:
+        return {"first_writers": [], "reached_entry_without_recognized_writer": True,
+                "backward_visited_instructions": 0}
+    pending = list(graph["predecessor"][target_index] & reachable)
     checked = set()
     results = []
     reached_entry = False
@@ -103,7 +107,7 @@ def _first_writers_on_cfg_paths(blob, start_off, graph, target_index, register):
             continue
         if i == 0:
             reached_entry = True
-        pending.extend(graph["predecessor"][i]-checked)
+        pending.extend((graph["predecessor"][i] & reachable)-checked)
     return {
         "first_writers": sorted(results,key=lambda x:x[0]),
         "reached_entry_without_recognized_writer": reached_entry,
@@ -178,7 +182,8 @@ def inspect_cfg_object_paths(blob, frame_report, precise_report,
         location=linear.get("instruction_va")
         matches=location in writer_vas
         status=(
-            "LINEAR_WRITER_NOT_A_CFG_FIRST_REACHING_CANDIDATE" if location is not None and not matches
+            "MODELED_FDE_ENTRY_CANNOT_REACH_SOURCE_LOAD" if idx not in graph["entry_reachable_indices"]
+            else "LINEAR_WRITER_NOT_A_CFG_FIRST_REACHING_CANDIDATE" if location is not None and not matches
             else "MULTIPLE_OR_ENTRY_REACHING_CANDIDATES" if len(writers)!=1 or reaches["reached_entry_without_recognized_writer"]
             else "SOLE_RECOGNIZED_CFG_FIRST_WRITER_NOT_PROVEN"
         )
