@@ -70,7 +70,7 @@ class OriginalStoreBranchSelectorTests(unittest.TestCase):
         frames,precise,cfg,stack=reports(binary)
         trail=paths.inspect_stack_store_paths(binary,frames,precise,cfg,stack)
         struct.pack_into("<I",binary,0x108,0xd503201f)
-        with self.assertRaisesRegex(ValueError,"stack-store byte/CFG/SP"):
+        with self.assertRaisesRegex(ValueError,"branch-store byte/CFG/SP"):
             selector.inspect_original_stack_store_branch_conditions(
                 binary,frames,precise,cfg,stack,trail)
 
