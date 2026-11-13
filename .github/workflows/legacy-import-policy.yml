@@ -42,6 +42,8 @@ on:
       - "tools/test_inspect_native_novel_indirect_calls.py"
       - "tools/inspect_native_novel_object_registers.py"
       - "tools/test_inspect_native_novel_object_registers.py"
+      - "tools/inspect_native_novel_cfg_paths.py"
+      - "tools/test_inspect_native_novel_cfg_paths.py"
       - "tools/probe_pristine_novel_dispatch.py"
       - "tools/verify_pristine_arm64_xapk.py"
       - "tools/test_verify_pristine_arm64_xapk.py"
@@ -130,6 +132,7 @@ jobs:
           python3 -m unittest discover -s tools -p 'test_inspect_native_novel_direct_callees.py' -v
           python3 -m unittest discover -s tools -p 'test_inspect_native_novel_indirect_calls.py' -v
           python3 -m unittest discover -s tools -p 'test_inspect_native_novel_object_registers.py' -v
+          python3 -m unittest discover -s tools -p 'test_inspect_native_novel_cfg_paths.py' -v
 
   pristine-arm64-source-tests:
     runs-on: ubuntu-24.04
