@@ -1,0 +1,55 @@
+name: DanMemoRe Offline Preview APK
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/danmemore-offline-preview-apk.yml"
+      - "android/danmemore-preview/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-offline-preview:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Install Android SDK tools
+        uses: android-actions/setup-android@v3
+      - name: Install Android API 35
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - name: Install Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.14.3"
+      - name: Assemble independent Android APK
+        run: gradle -p android/danmemore-preview :app:assembleDebug --no-daemon --stacktrace
+      - name: Verify signed APK and offline permissions
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk="android/danmemore-preview/app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$apk"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$apk"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$apk" | grep "package: name='dev.danmemore.preview'"
+          if "$ANDROID_HOME/build-tools/35.0.0/aapt" dump permissions "$apk" | grep -q "android.permission.INTERNET"; then
+            echo "Offline preview must not request network access" >&2
+            exit 1
+          fi
+          mkdir -p dist
+          cp "$apk" dist/DanMemoRe-Offline-Preview-0.1.apk
+          sha256sum dist/DanMemoRe-Offline-Preview-0.1.apk | tee dist/SHA256SUMS.txt
+      - name: Upload verified APK to this workflow run
+        uses: actions/upload-artifact@v4
+        with:
+          name: DanMemoRe-Offline-Preview-APK
+          path: dist/
+          if-no-files-found: error
+          retention-days: 30
