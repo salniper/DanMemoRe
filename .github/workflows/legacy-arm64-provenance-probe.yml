@@ -70,6 +70,41 @@ jobs:
                   }, sort_keys=True))
           PY
 
+          # Attempt to locate exact missing Phase-1 bootstrap files
+          # in the *same* SHA-pinned original XAPK. Do not upload resource bytes.
+          python3 tools/audit_original_xapk_bootstrap33.py \
+            --xapk "$candidate" \
+            --index data/legacy-bootstrap-reference-33.json \
+            > "$local_dir/bootstrap33.json"
+
+          python3 - "$local_dir/bootstrap33.json" <<'PY'
+          import json, sys, os
+          with open(sys.argv[1],encoding="utf-8") as source:
+              audit=json.load(source)
+          print("original_xapk_bootstrap33_nested_apks="+str(audit["nested_apks_scanned"]))
+          print("original_xapk_bootstrap33_exact_expected_path="+
+                str(audit["expected_path_exact_count"]))
+          print("original_xapk_bootstrap33_exact_alternate_path="+
+                str(audit["alternate_path_exact_count"]))
+          print("original_xapk_bootstrap33_any_exact_md5="+
+                str(audit["any_md5_exact_count"]))
+          with open(os.environ["GITHUB_STEP_SUMMARY"],"a",encoding="utf-8") as summary:
+              summary.write(
+                  "Phase-1 missing bootstrap resources with original "
+                  "XAPK ZIP-member exact MD5+size: "+str(audit["any_md5_exact_count"]) +
+                  " / 33 (correct location: "+str(audit["expected_path_exact_count"])+").\n")
+          for path,row in audit["targets"].items():
+              if row["same_basename_entries"]:
+                  print("original_xapk_bootstrap33_candidate="+json.dumps({
+                      "path":path,
+                      "same_basename_entries":row["same_basename_entries"],
+                      "wrong_size_entries":row["wrong_size_entries"],
+                      "same_size_wrong_md5_entries":row["same_size_wrong_md5_entries"],
+                      "exact_expected_locations":row["exact_md5_at_expected_apk_path"],
+                      "exact_alternate_locations":row["exact_md5_at_alternate_apk_path"],
+                  },sort_keys=True))
+          PY
+
           # Independently SHA-pin the source, then search only ELF .text
           # for references to the *start* of original novel source-path labels.
           # Report function/class metadata and instruction offsets only.
