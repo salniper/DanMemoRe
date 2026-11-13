@@ -75,3 +75,17 @@ python3 tools/restore_bootstrap33_pinned_local.py \\
 ```
 
 注意：XAPK 來源是第三方下載鏡像，而非可驗證的發行者伺服器；必須同時通過事先固定的原版封裝 SHA-1 與原始 ARM64 native SHA-256，才能採用檔案。
+
+### Phase 3 抽卡背景：實體檔案核對工具已備妥
+
+新增 [`tools/audit_phase3_lottery_background_files.py`](../tools/audit_phase3_lottery_background_files.py) 與合成資料回歸測試。在使用者完整備份可供程式讀取時，執行：
+
+```sh
+python3 tools/audit_phase3_lottery_background_files.py \\
+  --audit '/path/to/danmemore_legacy_audit 3(1).json' \\
+  --contents /path/to/original/contents
+```
+
+工具會針對稽核紀錄的 1,544 條 `3/files/lottery/background/*.png` 參考索引，逐檔以**實際檔案大小及 MD5**區分已驗證、缺少、版本不同或無法讀取；全程唯讀、不印出圖片內容、不移動檔案。
+
+**目前只完成分析器與合成測試，沒有取得使用者完整 14 GB 內容目錄，因此 1,544 個檔案的實體驗證結果仍然未知。**
