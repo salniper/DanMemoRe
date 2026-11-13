@@ -21,10 +21,17 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
-      - name: Install Android SDK tools
-        uses: android-actions/setup-android@v3
-      - name: Install Android API 35
-        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - name: Validate runner Android SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          test -d "$ANDROID_HOME"
+          if [ ! -d "$ANDROID_HOME/platforms/android-35" ] || [ ! -f "$ANDROID_HOME/build-tools/35.0.0/apksigner" ]; then
+            sdkmanager "platforms;android-35" "build-tools;35.0.0"
+          fi
+          test -f "$ANDROID_HOME/platforms/android-35/android.jar"
+          test -f "$ANDROID_HOME/build-tools/35.0.0/apksigner"
       - name: Install Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
