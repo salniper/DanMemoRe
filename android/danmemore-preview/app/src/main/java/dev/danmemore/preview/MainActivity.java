@@ -4,387 +4,735 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.SharedPreferences;
 import android.content.res.ColorStateList;
+import android.content.res.Configuration;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
+import android.text.InputType;
 import android.view.Gravity;
+import android.view.KeyEvent;
 import android.view.View;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
+import android.widget.ProgressBar;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
 import java.security.SecureRandom;
+import java.util.Locale;
 
 /**
- * Independently playable OFFLINE PROTOTYPE, not the recovered Memoria Freese.
- * All plot text, characters, battle values and gacha probabilities here are
- * newly authored stand-ins. It never imports or contacts the retired game.
+ * Original offline demo, NOT a revived original DanMemo / Memoria Freese app.
+ *
+ * 0.2: Landscape game layout, self-drawn fantasy scenery, controller support
+ * and clearer prototype game flows. Keeps the original 0.1 preference schema,
+ * but uses a separate Android package to avoid destroying the 0.1 save when
+ * GitHub runner-generated debug signing keys change.
+ *
+ * Does not request networking/storage access or import proprietary assets.
  */
 public final class MainActivity extends Activity {
-    private static final int BG = Color.rgb(9, 17, 29);
-    private static final int PANEL = Color.rgb(22, 36, 51);
-    private static final int INK = Color.rgb(239, 243, 247);
-    private static final int SOFT = Color.rgb(169, 190, 204);
-    private static final int GOLD = Color.rgb(239, 196, 123);
-    private static final int TEAL = Color.rgb(99, 219, 190);
+    private static final int BG = Color.rgb(7, 14, 25);
+    private static final int RAIL = Color.rgb(13, 26, 39);
+    private static final int PANEL = Color.rgb(18, 36, 51);
+    private static final int PANEL_BRIGHT = Color.rgb(25, 49, 62);
+    private static final int BORDER = Color.rgb(49, 76, 85);
+    private static final int INK = Color.rgb(237, 243, 246);
+    private static final int SOFT = Color.rgb(160, 185, 194);
+    private static final int GOLD = Color.rgb(235, 189, 117);
+    private static final int TEAL = Color.rgb(92, 210, 190);
+    private static final int RED = Color.rgb(241, 133, 124);
+
+    private static final String[] TABS = {"首頁", "劇情", "戰鬥", "抽卡", "存檔"};
     private static final String[] SCENES = {
-        "一封沒有署名的委託，出現在安靜的冒險者公會。",
-        "你走進迷宮入口，牆面上的火把照亮了陌生的足跡。",
-        "轉角傳來聲響。一隻守衛獸擋住通往下一層的階梯。",
-        "擊退守衛獸後，你拾起刻著星紋的石片。冒險，才剛開始。"
+        "一封沒有署名的委託，出現在安靜的冒險者公會。\n\n窗外的街燈還未點亮，你卻已經聽見遠處傳來的鐘聲。",
+        "你走進迷宮入口，牆面上的火把照亮了陌生的足跡。\n\n有人比你更早來到這裡。那個人，究竟在尋找什麼？",
+        "轉角傳來沉重的腳步聲，一隻守衛獸擋住通往下一層的階梯。\n\n你握緊武器，決定先找出牠的弱點。",
+        "擊退守衛獸後，你拾起刻著星紋的石片。\n\n石片在掌心微微發光。冒險，才剛開始。"
     };
     private static final String[] HEROES = {
         "見習劍士", "風之術師", "遺跡射手", "迷宮守護者", "星紋旅者"
     };
-    private final SecureRandom random = new SecureRandom();
-    private SharedPreferences save;
-    private LinearLayout body;
-    private int screen = 0;
-    private String notice = "測試版已就緒，所有操作均在本機完成。";
+    private static final String[] ROLES = {
+        "近戰 · 劍", "魔法 · 風", "遠程 · 弓", "防禦 · 盾", "支援 · 星"
+    };
 
-    @Override public void onCreate(Bundle state) {
-        super.onCreate(state);
+    private final SecureRandom rng = new SecureRandom();
+    private SharedPreferences prefs;
+    private LinearLayout content;
+    private int page;
+    private boolean wide;
+    private Button defaultButton;
+    private String notice = "離線系統就緒。這是獨立測試版，不含原版遊戲資產。";
+
+    @Override public void onCreate(Bundle saved) {
+        super.onCreate(saved);
         getWindow().setStatusBarColor(BG);
         getWindow().setNavigationBarColor(BG);
-        save = getSharedPreferences("danmemore-preview-v1", MODE_PRIVATE);
-        render(0);
+        prefs = getSharedPreferences("danmemore-preview-v1", MODE_PRIVATE);
+        render(saved == null ? 0 : Math.max(0, Math.min(4, saved.getInt("page", 0))));
     }
 
-    private int get(String key, int fallback) { return save.getInt(key, fallback); }
-    private void put(String key, int value) { save.edit().putInt(key, value).apply(); }
-    private int dp(int n) { return (int) (getResources().getDisplayMetrics().density * n + 0.5f); }
-
-    private GradientDrawable background(int color, int radius) {
-        GradientDrawable shape = new GradientDrawable();
-        shape.setColor(color);
-        shape.setCornerRadius(dp(radius));
-        return shape;
+    @Override protected void onSaveInstanceState(Bundle state) {
+        state.putInt("page", page);
+        super.onSaveInstanceState(state);
     }
 
-    private TextView text(String value, int size, int color, boolean bold) {
-        TextView label = new TextView(this);
-        label.setText(value);
-        label.setTextColor(color);
-        label.setTextSize(size);
-        if (bold) label.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        label.setLineSpacing(dp(3), 1f);
-        return label;
+    private int get(String key, int fallback) {
+        return prefs.getInt(key, fallback);
     }
 
-    private void card(String title, String description) {
-        LinearLayout container = new LinearLayout(this);
-        container.setOrientation(LinearLayout.VERTICAL);
-        container.setPadding(dp(18), dp(16), dp(18), dp(16));
-        container.setBackground(background(PANEL, 16));
-        LinearLayout.LayoutParams params =
-            new LinearLayout.LayoutParams(-1, -2);
-        params.setMargins(0, 0, 0, dp(12));
-        body.addView(container, params);
-        TextView headline = text(title, 18, GOLD, true);
-        container.addView(headline);
-        TextView copy = text(description, 15, INK, false);
-        LinearLayout.LayoutParams gap = new LinearLayout.LayoutParams(-1, -2);
-        gap.topMargin = dp(8);
-        container.addView(copy, gap);
+    private void put(String key, int value) {
+        prefs.edit().putInt(key, value).apply();
     }
 
-    private void subtitle(String value) {
-        TextView label = text(value, 14, SOFT, false);
-        LinearLayout.LayoutParams gap = new LinearLayout.LayoutParams(-1, -2);
-        gap.setMargins(0, 0, 0, dp(12));
-        body.addView(label, gap);
+    private int dp(float amount) {
+        return (int) (getResources().getDisplayMetrics().density * amount + .5f);
     }
 
-    private Button button(String value, boolean primary, Runnable onClick) {
-        Button btn = new Button(this);
-        btn.setText(value);
-        btn.setAllCaps(false);
-        btn.setTextSize(15);
-        btn.setTextColor(primary ? BG : INK);
-        btn.setBackgroundTintList(ColorStateList.valueOf(
-            primary ? TEAL : Color.rgb(48, 67, 82)));
-        btn.setOnClickListener(v -> onClick.run());
-        return btn;
+    private GradientDrawable shape(int color, int radius, boolean border) {
+        GradientDrawable drawable = new GradientDrawable();
+        drawable.setColor(color);
+        drawable.setCornerRadius(dp(radius));
+        if (border) drawable.setStroke(dp(1), BORDER);
+        return drawable;
     }
 
-    private void action(String label, boolean primary, Runnable onClick) {
-        Button b = button(label, primary, onClick);
-        LinearLayout.LayoutParams margin = new LinearLayout.LayoutParams(-1, dp(54));
-        margin.bottomMargin = dp(10);
-        body.addView(b, margin);
+    private GradientDrawable heroShape() {
+        GradientDrawable drawable = new GradientDrawable(
+                GradientDrawable.Orientation.TL_BR,
+                new int[]{Color.rgb(26, 55, 65), Color.rgb(14, 29, 44),
+                          Color.rgb(21, 31, 45)});
+        drawable.setCornerRadius(dp(19));
+        drawable.setStroke(dp(1), BORDER);
+        return drawable;
     }
 
-    private void render(int next) {
-        screen = next;
-        LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(16), dp(14), dp(16), 0);
+    private TextView text(String value, float sp, int color, boolean bold) {
+        TextView t = new TextView(this);
+        t.setText(value);
+        t.setTextColor(color);
+        t.setTextSize(sp);
+        t.setGravity(Gravity.CENTER_VERTICAL);
+        if (bold) t.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        t.setLineSpacing(dp(2), 1.05f);
+        return t;
+    }
+
+    private LinearLayout column() {
+        LinearLayout l = new LinearLayout(this);
+        l.setOrientation(LinearLayout.VERTICAL);
+        return l;
+    }
+
+    private LinearLayout row() {
+        LinearLayout l = new LinearLayout(this);
+        l.setOrientation(LinearLayout.HORIZONTAL);
+        l.setGravity(Gravity.CENTER_VERTICAL);
+        return l;
+    }
+
+    private void gap(LinearLayout parent, int height) {
+        View spacer = new View(this);
+        parent.addView(spacer, new LinearLayout.LayoutParams(dp(1), dp(height)));
+    }
+
+    private void addText(LinearLayout parent, String value, float size,
+                         int color, boolean bold, int below) {
+        TextView t = text(value, size, color, bold);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
+        params.bottomMargin = dp(below);
+        parent.addView(t, params);
+    }
+
+    private LinearLayout panel() {
+        LinearLayout pane = column();
+        pane.setPadding(dp(19), dp(16), dp(19), dp(16));
+        pane.setBackground(shape(PANEL, 17, true));
+        LinearLayout.LayoutParams margins = new LinearLayout.LayoutParams(-1, -2);
+        margins.bottomMargin = dp(13);
+        content.addView(pane, margins);
+        return pane;
+    }
+
+    private void card(String heading, String description) {
+        LinearLayout pane = panel();
+        addText(pane, heading, 18, GOLD, true, 8);
+        addText(pane, description, 15, INK, false, 0);
+    }
+
+    private void note(String value) {
+        addText(content, value, 12, SOFT, false, 12);
+    }
+
+    private Button makeButton(String label, boolean primary, Runnable action) {
+        Button b = new Button(this);
+        b.setText(label);
+        b.setTextSize(14);
+        b.setAllCaps(false);
+        b.setSingleLine(true);
+        b.setTextColor(primary ? BG : INK);
+        b.setPadding(dp(13), 0, dp(13), 0);
+        b.setBackground(shape(primary ? TEAL : PANEL_BRIGHT, 12, !primary));
+        b.setOnClickListener(v -> action.run());
+        b.setFocusable(true);
+        if (primary && defaultButton == null) defaultButton = b;
+        return b;
+    }
+
+    private void action(String label, boolean primary, Runnable run) {
+        Button b = makeButton(label, primary, run);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, dp(51));
+        params.bottomMargin = dp(9);
+        content.addView(b, params);
+    }
+
+    private void actionsHorizontal(String[] labels, Runnable[] handlers) {
+        LinearLayout band = row();
+        LinearLayout.LayoutParams bandParams =
+                new LinearLayout.LayoutParams(-1, -2);
+        bandParams.bottomMargin = dp(12);
+        content.addView(band, bandParams);
+        for (int i = 0; i < labels.length; i++) {
+            Button b = makeButton(labels[i], i == 0, handlers[i]);
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                    0, dp(52), 1);
+            params.rightMargin = i + 1 < labels.length ? dp(9) : 0;
+            band.addView(b, params);
+        }
+    }
+
+    private void sectionTitle(String kicker, String heading) {
+        addText(content, kicker, 12, TEAL, true, 5);
+        addText(content, heading, wide ? 24 : 21, INK, true, 13);
+    }
+
+    private void render(int destination) {
+        page = destination;
+        defaultButton = null;
+        Configuration configuration = getResources().getConfiguration();
+        wide = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+                && configuration.screenWidthDp >= 600;
+
+        LinearLayout root = wide ? row() : column();
+        root.setGravity(Gravity.TOP);
         root.setBackgroundColor(BG);
+        root.setPadding(dp(12), dp(10), dp(12), dp(10));
         setContentView(root);
 
-        TextView logo = text("DANMEMORE  /  OFFLINE PREVIEW", 12, TEAL, true);
-        root.addView(logo);
-        TextView heading = text("迷宮記憶 · 離線測試", 26, INK, true);
-        LinearLayout.LayoutParams titleGap = new LinearLayout.LayoutParams(-1, -2);
-        titleGap.setMargins(0, dp(4), 0, dp(4));
-        root.addView(heading, titleGap);
-        TextView warning = text("獨立原創測試內容｜非原版遊戲｜不需網路", 12, GOLD, false);
-        root.addView(warning);
-
-        HorizontalScrollView navScroll = new HorizontalScrollView(this);
-        navScroll.setHorizontalScrollBarEnabled(false);
-        LinearLayout nav = new LinearLayout(this);
-        nav.setPadding(0, dp(10), 0, dp(8));
-        navScroll.addView(nav);
-        String[] titles = {"首頁", "劇情", "戰鬥", "抽卡", "存檔"};
-        for (int i = 0; i < titles.length; i++) {
-            final int page = i;
-            Button b = button(titles[i], i == screen, () -> open(page));
-            LinearLayout.LayoutParams margin = new LinearLayout.LayoutParams(dp(79), dp(46));
-            margin.rightMargin = dp(5);
-            nav.addView(b, margin);
+        LinearLayout stage = column();
+        if (wide) {
+            LinearLayout rail = column();
+            rail.setPadding(dp(14), dp(17), dp(14), dp(12));
+            rail.setBackground(shape(RAIL, 18, true));
+            root.addView(rail, new LinearLayout.LayoutParams(dp(208), -1));
+            buildRail(rail);
+            LinearLayout.LayoutParams stageParams = new LinearLayout.LayoutParams(
+                    0, -1, 1);
+            stageParams.leftMargin = dp(14);
+            root.addView(stage, stageParams);
+        } else {
+            root.addView(stage, new LinearLayout.LayoutParams(-1, -1));
+            buildPortraitHeader(stage);
         }
-        root.addView(navScroll);
+
+        LinearLayout top = row();
+        stage.addView(top, new LinearLayout.LayoutParams(-1, dp(wide ? 49 : 44)));
+        LinearLayout topTitle = column();
+        top.addView(topTitle, new LinearLayout.LayoutParams(0, -2, 1));
+        addText(topTitle, "CHAPTER 00  /  OFFLINE PREVIEW 0.2", 10, TEAL, true, 2);
+        addText(topTitle, TABS[page] + "  ·  試作遊戲", wide ? 19 : 17, INK, true, 0);
+        TextView wallet = text("✦ " + get("iris", 1000), 14, GOLD, true);
+        wallet.setPadding(dp(12), dp(7), dp(12), dp(7));
+        wallet.setBackground(shape(RAIL, 14, true));
+        top.addView(wallet);
 
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(false);
-        root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
-        body = new LinearLayout(this);
-        body.setOrientation(LinearLayout.VERTICAL);
-        body.setPadding(0, dp(8), 0, dp(20));
-        scroll.addView(body);
+        scroll.setVerticalScrollBarEnabled(false);
+        stage.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
+        content = column();
+        content.setPadding(0, dp(7), dp(3), dp(12));
+        scroll.addView(content);
 
-        if (screen == 0) showHome();
-        else if (screen == 1) showStory();
-        else if (screen == 2) showBattle();
-        else if (screen == 3) showGacha();
-        else showSave();
+        switch (page) {
+            case 0: showHome(); break;
+            case 1: showStory(); break;
+            case 2: showBattle(); break;
+            case 3: showGacha(); break;
+            default: showSave(); break;
+        }
 
-        TextView status = text(notice, 12, SOFT, false);
-        status.setPadding(dp(3), dp(9), dp(3), dp(10));
-        root.addView(status);
+        TextView footer = text(notice, 12, SOFT, false);
+        footer.setBackground(shape(RAIL, 10, false));
+        footer.setPadding(dp(11), dp(8), dp(11), dp(8));
+        stage.addView(footer, new LinearLayout.LayoutParams(-1, -2));
+        if (wide) {
+            // Touch remains unrestricted; gamepad DPAD focuses the selected tab.
+            // No forced focus, so the primary story/button never steals taps.
+        }
     }
 
-    private void open(int page) {
-        if (page == 2 && !save.getBoolean("battleActive", false)) startBattle();
-        else render(page);
+    private void buildRail(LinearLayout rail) {
+        addText(rail, "✦ DANMEMORE", 17, GOLD, true, 4);
+        addText(rail, "迷宮記憶  /  PREVIEW", 10, SOFT, true, 15);
+        View line = new View(this);
+        line.setBackgroundColor(BORDER);
+        rail.addView(line, new LinearLayout.LayoutParams(-1, dp(1)));
+        gap(rail, 14);
+
+        for (int i = 0; i < TABS.length; i++) {
+            final int target = i;
+            boolean selected = page == i;
+            Button b = makeButton(String.format(Locale.ROOT, "%02d   %s", i + 1, TABS[i]),
+                    selected, () -> open(target));
+            b.setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                    -1, dp(49));
+            params.bottomMargin = dp(8);
+            rail.addView(b, params);
+        }
+
+        rail.addView(new View(this), new LinearLayout.LayoutParams(1, 0, 1));
+        addText(rail, "L1 / R1  切換頁面", 11, SOFT, false, 4);
+        addText(rail, "A  確認    B  返回", 11, SOFT, false, 8);
+        addText(rail, "完全離線 · 原創測試", 10, TEAL, false, 0);
+    }
+
+    private void buildPortraitHeader(LinearLayout stage) {
+        addText(stage, "✦ DANMEMORE  /  OFFLINE PREVIEW", 13, GOLD, true, 4);
+        addText(stage, "迷宮記憶 · 測試版 0.2", 23, INK, true, 4);
+        HorizontalScrollView scroller = new HorizontalScrollView(this);
+        scroller.setHorizontalScrollBarEnabled(false);
+        LinearLayout strip = row();
+        strip.setPadding(0, dp(5), 0, dp(8));
+        scroller.addView(strip);
+        for (int i = 0; i < TABS.length; i++) {
+            final int target = i;
+            Button b = makeButton(TABS[i], i == page, () -> open(target));
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                    dp(78), dp(43));
+            params.rightMargin = dp(6);
+            strip.addView(b, params);
+        }
+        stage.addView(scroller);
+    }
+
+    private void open(int next) {
+        render(Math.max(0, Math.min(4, next)));
     }
 
     private void showHome() {
-        card("回到迷宮的入口",
-            "這是一個可以安裝在 Android／AYN Thor 的獨立離線操作測試。"
-            + "\n\n目前包含原創短篇劇情、可操作的回合戰鬥、模擬抽卡，以及重新啟動後仍保留的本機存檔。");
-        card("目前持有", "測試晶石  " + get("iris", 1000) +
-            "\n已進行抽卡  " + get("draws", 0) +
-            "\n劇情進度  " + (get("chapter", 0) + 1) + " / " + SCENES.length);
-        action("進入劇情", true, () -> open(1));
-        action("開始戰鬥", false, () -> open(2));
-        action("前往抽卡", false, () -> open(3));
-        subtitle("本 APK 不含、也不會載入原版 Memoria Freese 遊戲素材或伺服器資料；原版劇情、技能、戰鬥、抽卡機率都尚未還原。");
+        sectionTitle("THE LOST ENTRY", "歡迎回到迷宮的入口");
+
+        LinearLayout hero = column();
+        hero.setPadding(dp(14), dp(13), dp(14), dp(13));
+        hero.setBackground(heroShape());
+        LinearLayout.LayoutParams margins = new LinearLayout.LayoutParams(-1, -2);
+        margins.bottomMargin = dp(14);
+        content.addView(hero, margins);
+        PortalView art = new PortalView(this);
+        hero.addView(art, new LinearLayout.LayoutParams(-1, dp(wide ? 172 : 142)));
+        gap(hero, 12);
+        addText(hero, "『即使記憶消散，故事仍能重新開始。』", 17, INK, true, 6);
+        addText(hero, "完全離線的互動原型：四節原創短篇、訓練戰鬥、模擬召喚。",
+                13, SOFT, false, 0);
+
+        LinearLayout summary = row();
+        LinearLayout.LayoutParams statsParams = new LinearLayout.LayoutParams(-1, -2);
+        statsParams.bottomMargin = dp(14);
+        content.addView(summary, statsParams);
+        metric(summary, "閱讀進度", (get("chapter", 0) + 1) + " / 4", true);
+        metric(summary, "勝利場次", String.valueOf(get("wins", 0)), false);
+        metric(summary, "模擬召喚", String.valueOf(get("draws", 0)), false);
+
+        if (wide) {
+            actionsHorizontal(new String[]{"繼續閱讀", "進入訓練場", "進行召喚"},
+                    new Runnable[]{() -> open(1), () -> open(2), () -> open(3)});
+        } else {
+            action("繼續閱讀劇情", true, () -> open(1));
+            action("進入戰鬥", false, () -> open(2));
+            action("前往抽卡", false, () -> open(3));
+        }
+        note("這不是已復原的原版 Memoria Freese；原版劇情、角色素材與完整戰鬥系統尚未接入。");
+    }
+
+    private void metric(LinearLayout parent, String title, String value, boolean left) {
+        LinearLayout pane = column();
+        pane.setPadding(dp(11), dp(11), dp(9), dp(11));
+        pane.setBackground(shape(PANEL, 12, true));
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, -2, 1);
+        params.rightMargin = dp(left ? 8 : 7);
+        parent.addView(pane, params);
+        addText(pane, title, 11, SOFT, false, 4);
+        addText(pane, value, wide ? 19 : 16, GOLD, true, 0);
     }
 
     private void showStory() {
         int chapter = Math.max(0, Math.min(SCENES.length - 1, get("chapter", 0)));
-        card("劇情 / 第 " + (chapter + 1) + " 節", SCENES[chapter]);
+        sectionTitle("ORIGINAL TEST STORY", "第一章  ·  星紋的邀請");
+        LinearLayout panel = panel();
+        addText(panel, String.format(Locale.ROOT, "EPISODE  %02d  /  04", chapter + 1),
+                12, TEAL, true, 13);
+        addText(panel, "第 " + (chapter + 1) + " 節", 20, GOLD, true, 14);
+        addText(panel, SCENES[chapter], wide ? 19 : 17, INK, false, 26);
+        addText(panel, "●  原創測試敘事  ·  進度自動儲存", 11, SOFT, false, 0);
+        ProgressBar progress = progress(TEAL, (chapter + 1) * 25);
+        LinearLayout.LayoutParams progressParams = new LinearLayout.LayoutParams(
+                -1, dp(8));
+        progressParams.bottomMargin = dp(17);
+        content.addView(progress, progressParams);
+
         if (chapter < SCENES.length - 1) {
-            action("繼續閱讀", true, () -> {
-                put("chapter", chapter + 1);
-                notice = "已自動儲存劇情進度。";
-                render(1);
-            });
+            if (wide) {
+                actionsHorizontal(new String[]{"閱讀下一節", "上一節"},
+                    new Runnable[]{() -> advanceStory(chapter), () -> previousStory(chapter)});
+            } else {
+                action("閱讀下一節", true, () -> advanceStory(chapter));
+                action("上一節", false, () -> previousStory(chapter));
+            }
         } else {
-            action("完成測試篇章", true, () -> {
-                if (!save.getBoolean("storyRewarded", false)) {
-                    save.edit().putBoolean("storyRewarded", true)
-                        .putInt("iris", get("iris", 1000) + 50).apply();
-                    notice = "第一次完成篇章：獲得 50 測試晶石！";
-                } else {
-                    notice = "已完成測試篇章，獎勵不會重複發放。";
-                }
-                render(1);
-            });
+            action("完成本篇並領取測試晶石", true, this::completeStory);
+            action("上一節", false, () -> previousStory(chapter));
         }
-        action("重讀第一節", false, () -> {
-            put("chapter", 0);
-            notice = "已重設閱讀位置，首次獎勵紀錄保留。";
-            render(1);
-        });
-        subtitle("此段為原創的測試腳本，不是原版遊戲劇情。");
+        note("目前僅使用獨立編寫的短篇測試文字，並非原版遊戲劇情。");
+    }
+
+    private void advanceStory(int chapter) {
+        put("chapter", Math.min(3, chapter + 1));
+        notice = "已儲存劇情進度。";
+        render(1);
+    }
+
+    private void previousStory(int chapter) {
+        put("chapter", Math.max(0, chapter - 1));
+        notice = "已移至上一節。";
+        render(1);
+    }
+
+    private void completeStory() {
+        if (!prefs.getBoolean("storyRewarded", false)) {
+            prefs.edit().putBoolean("storyRewarded", true)
+                    .putInt("iris", get("iris", 1000) + 50).apply();
+            notice = "原創測試篇章完成！首次獎勵 50 測試晶石。";
+        } else {
+            notice = "本篇已完成，首次獎勵不會重複發放。";
+        }
+        render(1);
+    }
+
+    private ProgressBar progress(int color, int percentage) {
+        ProgressBar bar = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
+        bar.setMax(100);
+        bar.setProgress(Math.max(0, Math.min(100, percentage)));
+        bar.setProgressTintList(ColorStateList.valueOf(color));
+        bar.setProgressBackgroundTintList(ColorStateList.valueOf(BORDER));
+        return bar;
+    }
+
+    private void healthLine(LinearLayout parent, String label, int current,
+                            int total, int color) {
+        LinearLayout line = row();
+        TextView name = text(label, 14, INK, true);
+        line.addView(name, new LinearLayout.LayoutParams(0, -2, 1));
+        TextView hp = text(current + " / " + total, 14, color, true);
+        line.addView(hp);
+        parent.addView(line);
+        gap(parent, 5);
+        ProgressBar bar = progress(color, (current * 100) / total);
+        LinearLayout.LayoutParams lineParams = new LinearLayout.LayoutParams(-1, dp(8));
+        lineParams.bottomMargin = dp(15);
+        parent.addView(bar, lineParams);
     }
 
     private void startBattle() {
-        save.edit()
-            .putInt("hp", 100).putInt("enemyHp", 85)
-            .putInt("heals", 2).putBoolean("battleActive", true)
-            .apply();
-        notice = "測試戰鬥開始！";
+        prefs.edit()
+                .putInt("hp", 100).putInt("enemyHp", 85)
+                .putInt("heals", 2).putBoolean("battleActive", true)
+                .putString("battleLog", "你踏入訓練場。守衛獸正在觀察你。")
+                .apply();
+        notice = "新一場訓練戰鬥開始。";
         render(2);
     }
 
     private void showBattle() {
-        boolean active = save.getBoolean("battleActive", false);
-        int hp = get("hp", 100);
-        int enemyHp = get("enemyHp", 85);
-        card("訓練場 · 回合戰鬥",
-            "你的生命：" + hp + " / 100\n守衛獸生命：" + enemyHp +
-            " / 85\n剩餘治療：" + get("heals", 2));
+        sectionTitle("TACTICAL TRAINING", "訓練場  ·  守衛獸");
+        boolean active = prefs.getBoolean("battleActive", false);
+        LinearLayout gauges = panel();
+        healthLine(gauges, "冒險者", get("hp", 100), 100, TEAL);
+        healthLine(gauges, "守衛獸", get("enemyHp", 85), 85, RED);
+        addText(gauges, "剩餘治療藥劑   " + get("heals", 2)
+                + " / 2", 13, SOFT, false, 0);
+
+        LinearLayout logPanel = panel();
+        addText(logPanel, "戰鬥紀錄  /  BATTLE LOG", 12, GOLD, true, 8);
+        addText(logPanel,
+                prefs.getString("battleLog", "尚未進入訓練場。"),
+                15, INK, false, 0);
+
         if (!active) {
-            subtitle("上一場戰鬥已結束，隨時可以重新挑戰。");
-            action("重新開始戰鬥", true, this::startBattle);
-            return;
+            action("開始新戰鬥", true, this::startBattle);
+        } else if (wide) {
+            actionsHorizontal(new String[]{"攻擊", "防禦", "治療 +30"},
+                    new Runnable[]{
+                        () -> fight("attack"),
+                        () -> fight("guard"),
+                        () -> fight("heal")
+                    });
+            action("結束本場戰鬥", false, this::stopBattle);
+        } else {
+            action("普通攻擊", true, () -> fight("attack"));
+            action("防禦", false, () -> fight("guard"));
+            action("治療 +30", false, () -> fight("heal"));
+            action("結束本場戰鬥", false, this::stopBattle);
         }
-        action("普通攻擊", true, () -> fight("attack"));
-        action("防禦", false, () -> fight("guard"));
-        action("治療 +30", false, () -> fight("heal"));
-        action("退出本場戰鬥", false, () -> {
-            save.edit().putBoolean("battleActive", false).apply();
-            notice = "已離開測試戰鬥。";
-            render(2);
-        });
-        subtitle("戰鬥數值與敵人均為獨立測試規則，非原版演算。");
+        note("技能、敵人、數值、勝負判定皆為原創測試規則，不等於原版戰鬥。");
+    }
+
+    private void stopBattle() {
+        prefs.edit().putBoolean("battleActive", false)
+                .putString("battleLog", "你已離開訓練場。").apply();
+        notice = "已結束本場戰鬥。";
+        render(2);
     }
 
     private void fight(String move) {
-        int hp = get("hp", 100);
+        int heroHp = get("hp", 100);
         int enemyHp = get("enemyHp", 85);
         int heals = get("heals", 2);
-        boolean guarded = move.equals("guard");
-        if (move.equals("attack")) {
-            int dealt = 16 + random.nextInt(11);
+        boolean guarded = "guard".equals(move);
+        String message;
+
+        if ("attack".equals(move)) {
+            int dealt = 16 + rng.nextInt(11);
             enemyHp = Math.max(0, enemyHp - dealt);
-            notice = "你造成 " + dealt + " 點傷害。";
-        } else if (move.equals("heal")) {
+            message = "你的攻擊造成 " + dealt + " 點傷害。";
+        } else if ("heal".equals(move)) {
             if (heals == 0) {
-                notice = "治療次數已用完。";
+                notice = "治療藥劑已用完。";
                 render(2);
                 return;
             }
             heals--;
-            hp = Math.min(100, hp + 30);
-            notice = "你恢復了 30 點生命（最多 100）。";
+            int restored = Math.min(30, 100 - heroHp);
+            heroHp += restored;
+            message = "使用藥劑，恢復 " + restored + " 點生命。";
         } else {
-            notice = "你採取防禦姿態。";
+            message = "你架起防禦姿態，準備迎接攻擊。";
         }
+
+        SharedPreferences.Editor editor = prefs.edit();
         if (enemyHp == 0) {
-            int rewards = 80;
-            save.edit().putInt("hp", hp).putInt("enemyHp", 0)
-                .putInt("heals", heals).putBoolean("battleActive", false)
-                .putInt("iris", get("iris", 1000) + rewards)
-                .putInt("wins", get("wins", 0) + 1).apply();
-            notice += " 戰鬥勝利！獲得 " + rewards + " 測試晶石。";
+            editor.putBoolean("battleActive", false)
+                    .putInt("iris", get("iris", 1000) + 80)
+                    .putInt("wins", get("wins", 0) + 1);
+            message += "\n★ 勝利！獲得 80 測試晶石。";
         } else {
-            int received = guarded ? (2 + random.nextInt(5)) :
-                (9 + random.nextInt(11));
-            hp = Math.max(0, hp - received);
-            save.edit().putInt("hp", hp).putInt("enemyHp", enemyHp)
-                .putInt("heals", heals).putBoolean("battleActive", hp > 0).apply();
-            notice += " 守衛獸反擊 " + received + " 點。";
-            if (hp == 0) notice += " 戰鬥失敗，可重新挑戰。";
+            int received = guarded ? 2 + rng.nextInt(5) :
+                    9 + rng.nextInt(11);
+            heroHp = Math.max(0, heroHp - received);
+            message += "\n守衛獸反擊，造成 " + received + " 點傷害。";
+            if (heroHp == 0) {
+                editor.putBoolean("battleActive", false);
+                message += "\n戰鬥失敗。可以重新挑戰。";
+            }
         }
+        editor.putInt("hp", heroHp).putInt("enemyHp", enemyHp)
+                .putInt("heals", heals)
+                .putString("battleLog", message).apply();
+        notice = "本回合已完成並自動儲存。";
         render(2);
     }
 
     private void showGacha() {
-        card("記憶召喚 · 模擬抽卡",
-            "測試晶石：" + get("iris", 1000) +
-            "\n累計抽卡：" + get("draws", 0) +
-            "\n單抽消耗：100 測試晶石" +
-            "\n此處抽卡不涉及任何真實貨幣或連線交易。");
-        String recent = save.getString("lastDraw", "尚未進行召喚");
-        card("最近一次召喚", recent);
-        action("抽取 1 次（100）", true, () -> draw(1));
-        action("抽取 10 次（1000）", false, () -> draw(10));
-        action("調整測試晶石數量", false, this::changeIris);
-        subtitle("所有角色為測試用原創名稱，機率是暫定規則，不代表原版卡池。");
+        sectionTitle("MEMORY SUMMON", "星紋召喚  ·  模擬卡池");
+        LinearLayout summon = column();
+        summon.setPadding(dp(20), dp(17), dp(20), dp(17));
+        summon.setBackground(heroShape());
+        LinearLayout.LayoutParams margins = new LinearLayout.LayoutParams(-1, -2);
+        margins.bottomMargin = dp(13);
+        content.addView(summon, margins);
+        addText(summon, "✦  THE ASTRAL ARCHIVE", 12, TEAL, true, 8);
+        addText(summon, "星辰不會忘記旅人的名字。", wide ? 23 : 19,
+                INK, true, 10);
+        addText(summon, "5★  5%   ·   4★  19%   ·   3★  76%\n"
+                + "單抽 100 晶石  /  十連 1,000 晶石",
+                13, SOFT, false, 0);
+
+        if (wide) {
+            actionsHorizontal(new String[]{"召喚 1 次", "召喚 10 次", "調整晶石"},
+                    new Runnable[]{() -> draw(1), () -> draw(10), this::changeIris});
+        } else {
+            action("單抽 · 100", true, () -> draw(1));
+            action("十連 · 1,000", false, () -> draw(10));
+            action("調整測試晶石", false, this::changeIris);
+        }
+        card("最新召喚結果  ·  " + get("draws", 0) + " 抽",
+                prefs.getString("lastDraw", "尚未召喚。\n選擇單抽或十連即可看到結果。"));
+        note("抽卡名稱及機率均為原創測試資料；僅使用虛擬晶石，沒有任何交易。");
     }
 
     private void draw(int count) {
-        int price = 100 * count, iris = get("iris", 1000);
-        if (iris < price) {
-            notice = "測試晶石不足，請使用下方按鈕自行調整。";
+        int iris = get("iris", 1000);
+        int cost = count * 100;
+        if (iris < cost) {
+            notice = "晶石不足，請先調整測試晶石數量。";
             render(3);
             return;
         }
-        StringBuilder listing = new StringBuilder();
-        SharedPreferences.Editor editor = save.edit()
-            .putInt("iris", iris - price)
-            .putInt("draws", get("draws", 0) + count);
+        int[] increments = new int[HEROES.length];
+        StringBuilder result = new StringBuilder();
         for (int n = 0; n < count; n++) {
-            int roll = random.nextInt(100);
-            int idx = roll < 5 ? 4 : roll < 24 ? 3 : random.nextInt(3);
-            int rarity = idx == 4 ? 5 : idx == 3 ? 4 : 3;
-            String key = "hero_" + idx;
-            int amount = get(key, 0) + 1;
-            // Multiple copies in the same batch are counted below by
-            // tracking the in-batch increment independently.
-            for (int prior = 0; prior < n; prior++) {
-                // No-op: counts are maintained by local batch array below.
+            int roll = rng.nextInt(100);
+            int index = roll < 5 ? 4 : roll < 24 ? 3 : rng.nextInt(3);
+            int rarity = index == 4 ? 5 : index == 3 ? 4 : 3;
+            increments[index]++;
+            if (n > 0) result.append('\n');
+            result.append(rarity == 5 ? "✦✦ " : rarity == 4 ? "✦ " : "· ")
+                    .append(rarity).append("★ ")
+                    .append(HEROES[index]);
+        }
+        SharedPreferences.Editor editor = prefs.edit()
+                .putInt("iris", iris - cost)
+                .putInt("draws", get("draws", 0) + count)
+                .putString("lastDraw", result.toString());
+        for (int i = 0; i < increments.length; i++) {
+            if (increments[i] != 0) {
+                editor.putInt("hero_" + i, get("hero_" + i, 0) + increments[i]);
             }
-            listing.append(rarity).append("★ ").append(HEROES[idx]).append('\n');
         }
-        // Recount the exact revealed batch rather than re-rolling it.
-        String[] lines = listing.toString().split("\n");
-        for (int i = 0; i < HEROES.length; i++) {
-            int delta = 0;
-            for (String line : lines) if (line.endsWith(HEROES[i])) delta++;
-            if (delta > 0) editor.putInt("hero_" + i, get("hero_" + i, 0) + delta);
-        }
-        editor.putString("lastDraw", listing.toString().trim()).apply();
-        notice = "離線模擬召喚完成 " + count + " 次，抽卡結果已儲存。";
+        editor.apply();
+        notice = count + " 次模擬召喚完成；結果和角色數量已存檔。";
         render(3);
     }
 
     private void changeIris() {
-        final String[] options = {
-            "增加 100", "增加 1,000", "直接設為 10,000", "設為 0"
-        };
+        final String[] options = {"增加 1,000", "直接設為 10,000",
+                "自訂數量（0～1億）", "設為 0"};
+        new AlertDialog.Builder(this).setTitle("調整模擬晶石")
+                .setItems(options, (dialog, selected) -> {
+                    if (selected == 2) {
+                        editCustomIris();
+                        return;
+                    }
+                    int amount = selected == 0 ?
+                            (int)Math.min(100000000L, (long)get("iris", 1000) + 1000L)
+                            : selected == 1 ? 10000 : 0;
+                    put("iris", amount);
+                    notice = "測試晶石已更新為 " + amount + "。";
+                    render(3);
+                }).setNegativeButton("取消", null).show();
+    }
+
+    private void editCustomIris() {
+        EditText input = new EditText(this);
+        input.setInputType(InputType.TYPE_CLASS_NUMBER);
+        input.setSingleLine(true);
+        input.setText(String.valueOf(get("iris", 1000)));
+        input.setSelectAllOnFocus(true);
+        input.setPadding(dp(19), dp(12), dp(19), dp(12));
         new AlertDialog.Builder(this)
-            .setTitle("調整測試晶石（無上限，可自行設定）")
-            .setItems(options, (dialog, which) -> {
-                int current = get("iris", 1000);
-                int amount = which == 0 ? Math.min(100000000, current + 100)
-                    : which == 1 ? Math.min(100000000, current + 1000)
-                    : which == 2 ? 10000 : 0;
-                put("iris", amount);
-                notice = "測試晶石已改為 " + amount + "，並儲存於本機。";
-                render(3);
-            }).setNegativeButton("取消", null).show();
+                .setTitle("設定測試晶石 · 0 至 100,000,000")
+                .setView(input)
+                .setPositiveButton("保存", (dialog, which) -> {
+                    try {
+                        long amount = Long.parseLong(input.getText().toString().trim());
+                        if (amount < 0 || amount > 100000000L) {
+                            notice = "輸入超出範圍：請填入 0 至 1 億。";
+                        } else {
+                            put("iris", (int)amount);
+                            notice = "自訂晶石數量已儲存。";
+                        }
+                    } catch (NumberFormatException invalid) {
+                        notice = "晶石數量無效，請輸入整數。";
+                    }
+                    render(3);
+                })
+                .setNegativeButton("取消", null).show();
     }
 
     private void showSave() {
-        StringBuilder owned = new StringBuilder();
+        sectionTitle("LOCAL SAVE FILE", "冒險者紀錄");
+        card("本機進度",
+                "劇情  " + (get("chapter", 0) + 1) + " / 4" +
+                "\n戰鬥勝場  " + get("wins", 0) +
+                "\n模擬召喚  " + get("draws", 0) + " 次" +
+                "\n測試晶石  " + get("iris", 1000));
+
+        LinearLayout pane = panel();
+        addText(pane, "冒險者收藏  /  COLLECTION", 17, GOLD, true, 10);
+        boolean hasHeroes = false;
         for (int i = 0; i < HEROES.length; i++) {
-            int copies = get("hero_" + i, 0);
-            if (copies > 0) owned.append(HEROES[i]).append(" × ")
-                .append(copies).append('\n');
+            int amount = get("hero_" + i, 0);
+            if (amount == 0) continue;
+            hasHeroes = true;
+            String star = i == 4 ? "5★" : i == 3 ? "4★" : "3★";
+            addText(pane, star + "  " + HEROES[i] + "     × " + amount +
+                    "\n       " + ROLES[i], 14, INK, false, 9);
         }
-        card("本機存檔狀態",
-            "劇情位置：" + (get("chapter", 0) + 1) + " / " + SCENES.length +
-            "\n戰鬥勝場：" + get("wins", 0) +
-            "\n抽卡次數：" + get("draws", 0) +
-            "\n測試晶石：" + get("iris", 1000));
-        card("已抽得的角色", owned.length() == 0 ?
-            "目前尚無紀錄，先試試看模擬抽卡。" : owned.toString().trim());
-        action("返回首頁", true, () -> open(0));
-        action("清除測試存檔", false, () ->
-            new AlertDialog.Builder(this)
-                .setTitle("確定清除本機測試紀錄？")
-                .setMessage("會重置劇情、戰鬥、抽卡與測試晶石。原版遊戲資料不會受到影響。")
+        if (!hasHeroes) {
+            addText(pane, "目前尚無角色。試試模擬召喚，看看會出現誰。",
+                    14, SOFT, false, 0);
+        }
+        if (wide) {
+            actionsHorizontal(new String[]{"返回首頁", "清除本版測試存檔"},
+                    new Runnable[]{() -> open(0), this::confirmReset});
+        } else {
+            action("返回首頁", true, () -> open(0));
+            action("清除本版測試存檔", false, this::confirmReset);
+        }
+        note("存檔只儲存在本機的 0.2 測試 App 中；舊版 0.1 和原版遊戲不受影響。");
+    }
+
+    private void confirmReset() {
+        new AlertDialog.Builder(this)
+                .setTitle("清除 0.2 版測試存檔？")
+                .setMessage("此操作只重設目前這個離線測試版。"
+                        + "\n原版遊戲及舊 0.1 測試版都不會受到影響。")
                 .setPositiveButton("確認清除", (dialog, which) -> {
-                    save.edit().clear().apply();
-                    notice = "測試存檔已清除，初始晶石恢復為 1,000。";
+                    prefs.edit().clear().apply();
+                    notice = "本版測試存檔已清除，晶石回到 1,000。";
                     render(4);
                 })
-                .setNegativeButton("取消", null).show()
-        );
-        subtitle("使用 Android SharedPreferences 保存在本機。不需帳號、不上傳存檔、不讀取原版遊戲資料。");
+                .setNegativeButton("取消", null)
+                .show();
+    }
+
+    @Override public boolean dispatchKeyEvent(KeyEvent event) {
+        if (event.getAction() == KeyEvent.ACTION_DOWN && event.getRepeatCount() == 0) {
+            int key = event.getKeyCode();
+            if (key == KeyEvent.KEYCODE_BUTTON_L1) {
+                open((page + 4) % 5);
+                return true;
+            }
+            if (key == KeyEvent.KEYCODE_BUTTON_R1) {
+                open((page + 1) % 5);
+                return true;
+            }
+            if (key == KeyEvent.KEYCODE_BUTTON_B) {
+                if (page != 0) open(0);
+                return page != 0;
+            }
+            if (key == KeyEvent.KEYCODE_BUTTON_A) {
+                View focused = getCurrentFocus();
+                if (focused instanceof Button) {
+                    focused.performClick();
+                    return true;
+                }
+                if (defaultButton != null) {
+                    defaultButton.performClick();
+                    return true;
+                }
+            }
+        }
+        return super.dispatchKeyEvent(event);
     }
 
     @Override public void onBackPressed() {
-        if (screen != 0) render(0);
+        if (page != 0) open(0);
         else super.onBackPressed();
     }
 }
