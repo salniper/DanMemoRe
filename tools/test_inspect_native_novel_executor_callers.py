@@ -37,7 +37,33 @@ class OriginalExecutorCallerTests(unittest.TestCase):
             "from_register":0,"immediate":None,"byte_offset":None,
         }])
         self.assertFalse(row["incoming_X1_value_verified"])
+        trace=row["copied_X1_source_register_traces"][0]
+        self.assertEqual(trace["copied_from_register"],0)
+        self.assertEqual(trace["prior_register_writers"],[])
+        self.assertTrue(trace["possible_incoming_argument_without_prior_writer"])
+        self.assertFalse(trace["actual_register_value_verified"])
         self.assertEqual(result["original_vtable_targets_verified"],0)
+        self.assertEqual(result["original_opcode_handler_mappings_verified"],0)
+
+    def test_X22_to_X1_copy_traces_one_more_register_hop(self):
+        binary,frames=fixture()
+        struct.pack_into("<I",binary,0x180,0xaa0003f6)  # MOV X22,X0
+        struct.pack_into("<I",binary,0x184,0xaa1603e1)  # MOV X1,X22
+        delta=0x1000-0x1088
+        struct.pack_into("<I",binary,0x188,
+                         0x94000000|((delta>>2)&0x03ffffff))
+        result=callers.inspect_direct_original_executor_callers(binary,frames)
+        self.assertEqual(result["direct_bl_sites"],1)
+        row=result["candidate_callers"][0]
+        self.assertEqual(row["site_va"],0x1088)
+        self.assertEqual(row["recognized_X1_writer_candidates"][0]["from_register"],22)
+        trace=row["copied_X1_source_register_traces"][0]
+        self.assertEqual(trace["copied_from_register"],22)
+        self.assertEqual(trace["prior_register_writers"],[{
+            "writer_va":0x1080,"kind":"COPY_REGISTER",
+            "source_register":0,"byte_offset":None,"immediate":None,
+        }])
+        self.assertFalse(trace["actual_register_value_verified"])
         self.assertEqual(result["original_opcode_handler_mappings_verified"],0)
 
     def test_original_tail_branch_is_not_called_verified_Cpp_method(self):
