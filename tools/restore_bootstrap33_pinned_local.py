@@ -24,7 +24,7 @@ import urllib.request
 from stage_original_xapk_bootstrap33 import stage
 from verify_pristine_arm64_xapk import MAX_XAPK_SIZE, PINNED_XAPK_SHA1
 
-OFFICIAL_MIRROR_CANDIDATE = (
+THIRD_PARTY_MIRROR_CANDIDATE = (
     "https://d.apkpure.net/b/XAPK/com.eu.danmemo"
     "?nc=&sv=19&versionCode=170316722"
 )
@@ -47,7 +47,7 @@ def download_pinned_source(destination: Path) -> dict:
         raise ValueError("temporary source directory unavailable")
     opener = urllib.request.build_opener(_HttpsOnlyRedirect)
     request = urllib.request.Request(
-        OFFICIAL_MIRROR_CANDIDATE,
+        THIRD_PARTY_MIRROR_CANDIDATE,
         headers={"User-Agent": "DanMemoRe-Preservation-Verify/1.0",
                  "Accept-Encoding": "identity"},
     )
