@@ -21,6 +21,7 @@ from inspect_native_novel_cfg_paths import inspect_cfg_object_paths
 from inspect_native_novel_stack_slots import inspect_stack_slot_sources
 from inspect_native_novel_stack_store_paths import inspect_stack_store_paths
 from inspect_native_novel_store_branch_selectors import inspect_original_stack_store_branch_conditions
+from inspect_native_novel_executor_callers import inspect_direct_original_executor_callers
 from inspect_native_novel_direct_callees import inspect_direct_callees, classify_direct_callee_code, find_second_hop_handler_source_candidates
 from inspect_native_novel_elf_sections import parse_sections
 from verify_pristine_arm64_xapk import (
@@ -73,6 +74,8 @@ def inspect_original_source(path):
     original_stack_branch_evidence = inspect_original_stack_store_branch_conditions(
         original, unwind_frames, precise_region_code, original_cfg_paths,
         original_stack_writers, original_stack_path_evidence)
+    original_incoming_callers = inspect_direct_original_executor_callers(
+        original, unwind_frames)
     direct_callees = inspect_direct_callees(original, report, unwind_frames,
                                            precise_region_code)
     second_hop = classify_direct_callee_code(original, direct_callees)
@@ -105,6 +108,7 @@ def inspect_original_source(path):
         "original_executor_stack_store_sources": original_stack_writers,
         "original_executor_stack_store_paths": original_stack_path_evidence,
         "original_executor_stack_store_branch_selectors": original_stack_branch_evidence,
+        "original_executor_direct_callers": original_incoming_callers,
         "original_executor_direct_callees": direct_callees,
         "original_executor_direct_callee_code_shapes": second_hop,
         "original_executor_two_hop_novel_cpp_candidates": handler_candidates,
