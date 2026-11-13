@@ -113,6 +113,7 @@ jobs:
                   "caller_status":site["caller_elf_unwind_status"],
                   "caller_fde_start_va":site["caller_fde_start_va"],
                   "recognized_X1_writers":site["recognized_X1_writer_candidates"],
+                  "copied_X1_source_traces":site.get("copied_X1_source_register_traces",[]),
                   "path_without_X1_writer":site.get("entry_path_without_recognized_X1_writer"),
                   "runtime_X1_value_proven":False
               },sort_keys=True))
