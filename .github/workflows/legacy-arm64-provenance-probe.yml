@@ -98,6 +98,24 @@ jobs:
           print("original_unwind_fde_index_entries=" + str(unwind["fde_index_entries"]))
           print("original_executor_unwind_covered_anchors=" +
                 str(unwind["exact_fde_coverage_count"]))
+          callers=report["original_executor_direct_callers"]
+          print("original_executor_external_direct_sites="+
+                str(callers["direct_external_call_or_tail_jump_sites"]))
+          print("original_executor_external_BL_sites="+
+                str(callers["direct_bl_sites"]))
+          print("original_executor_external_tail_B_sites="+
+                str(callers["tail_b_candidate_sites"]))
+          print("original_executor_incoming_X1_object_proven="+
+                str(callers["original_X1_runtime_object_verified"]))
+          for site in callers["candidate_callers"][:24]:
+              print("original_executor_incoming_X1_caller="+json.dumps({
+                  "call_va":site["site_va"],"call_kind":site["kind"],
+                  "caller_status":site["caller_elf_unwind_status"],
+                  "caller_fde_start_va":site["caller_fde_start_va"],
+                  "recognized_X1_writers":site["recognized_X1_writer_candidates"],
+                  "path_without_X1_writer":site.get("entry_path_without_recognized_X1_writer"),
+                  "runtime_X1_value_proven":False
+              },sort_keys=True))
           selector=report["original_executor_stack_store_branch_selectors"]
           print("original_stack_selector_alternative_queries="+
                 str(selector["alternative_store_queries"]))
