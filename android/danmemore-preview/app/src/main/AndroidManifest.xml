@@ -3,7 +3,7 @@
     <!-- This preview deliberately does not request INTERNET or storage permissions. -->
     <application
         android:allowBackup="false"
-        android:label="DanMemoRe 離線測試"
+        android:label="DanMemoRe 離線測試 0.2"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Material.NoActionBar">
         <activity android:name=".MainActivity"
