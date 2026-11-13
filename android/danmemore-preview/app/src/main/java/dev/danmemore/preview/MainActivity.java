@@ -295,6 +295,8 @@ public final class MainActivity extends Activity {
             params.bottomMargin = dp(8);
             rail.addView(b, params);
         }
+        // Navigation highlight is not the primary in-page controller action.
+        defaultButton = null;
 
         rail.addView(new View(this), new LinearLayout.LayoutParams(1, 0, 1));
         addText(rail, "L1 / R1  切換頁面", 11, SOFT, false, 4);
@@ -319,6 +321,7 @@ public final class MainActivity extends Activity {
             strip.addView(b, params);
         }
         stage.addView(scroller);
+        defaultButton = null;
     }
 
     private void open(int next) {
@@ -713,8 +716,9 @@ public final class MainActivity extends Activity {
                 return true;
             }
             if (key == KeyEvent.KEYCODE_BUTTON_B) {
-                if (page != 0) open(0);
-                return page != 0;
+                boolean shouldNavigate = page != 0;
+                if (shouldNavigate) open(0);
+                return shouldNavigate;
             }
             if (key == KeyEvent.KEYCODE_BUTTON_A) {
                 View focused = getCurrentFocus();
