@@ -6,11 +6,11 @@ android {
     namespace = "dev.danmemore.preview"
     compileSdk = 35
     defaultConfig {
-        applicationId = "dev.danmemore.preview"
+        applicationId = "dev.danmemore.preview.v2"
         minSdk = 26
         targetSdk = 32
-        versionCode = 1
-        versionName = "0.1.0-preview"
+        versionCode = 2
+        versionName = "0.2.0-preview"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
