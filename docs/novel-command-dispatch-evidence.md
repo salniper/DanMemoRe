@@ -642,3 +642,95 @@ that select the X1-derived versus zero-valued stack store and
 track the origin/meaning of incoming X1 at a verified call site.
 Only an evidence-based handler pointer or runtime-dispatched
 original command can justify a script playback implementation.
+
+
+
+## 13. Original CBZ X20 fork and two externally verified X1 call origins (2026-11-13)
+
+**This pass establishes the strongest static *branch syntax* evidence
+so far**, not original numeric novel-command dispatch or playback.
+
+On the same SHA-1-pinned EU 15.1.0 XAPK and SHA-256-verified native
+\`libapp.so\`, the new path/condition analyzer examined the one
+CIE/FDE-backed 1,424-byte NovelCommandExecuter-source region and the
+two earlier \`STP\` writes to entry-SP-normalized stack slot \`-256\`.
+
+[Authentic original stack-store selector evidence](https://github.com/salniper/DanMemoRe/actions/runs/43376350241):
+
+- At original ARM64 virtual address **33417564**, the machine code
+  is **\`CBZ X20\`** (take branch if X20 equals zero).
+- **Fallthrough** goes to VA **33417568** and has as its first
+  identified corresponding-slot write **33417588**, saving **X20**.
+- **Taken** goes to VA **33417612**, itself the first identified
+  corresponding-slot write, saving **XZR (constant zero)**.
+- The \`CBZ\` is a common predecessor that **dominates both writes
+  within the supported original FDE CFG**; the branch arms reach
+  distinct first store candidates before the later load at
+  **33417628**. Both store→load path candidates survive the
+  restricted recognized-clobber check.
+- The modeled closest first-reaching recognized X20 writer at the
+  branch is **\`MOV X20,X1\`**, VA **33417468**.
+
+**Interpretation:** the instruction-level pattern is consistent
+with a null check controlling whether a pointer-like value or
+zero enters the slot. It does **not** prove any actual runtime
+branch decision, nor that X20 always holds the unmodified X1
+value on all real execution paths. In particular, missing
+register definitions, memory aliases, indirect branches and
+exceptional control flow are not proven absent.
+
+### Actual original external calls to the executor-source CFI region
+
+A new whole-\`.text\` code scan looked for direct ARM64 \`BL\`
+(and possible tail \`B\`) whose decoded PC-relative destination
+equals **the exact validated FDE start**, **33417424**. It found
+**two** external \`BL\` calls and **zero** direct tail \`B\`
+candidates. Both external call sites were independently covered
+by a valid original CIE/FDE, with entry-reachable supported CFG
+paths and a recognized X1 setup instruction:
+
+| External call VA | Caller FDE start | Candidate X1 setup | One more recognized source |
+| ---: | ---: | --- | --- |
+| **29888244** | 29887840 | \`MOV X1,X0\` at **29888060** | \`LDR X0,[X20,#1264]\` at **29888032** |
+| **33335336** | 33335120 | \`MOV X1,X22\` at **33335332** | \`ADD X22,X20,#16\` at **33335328** |
+
+[Authenticated original caller and upstream-register analysis](https://github.com/salniper/DanMemoRe/actions/runs/43376350241).
+
+\`LDR X0,[X20,#1264]\` reads a value from an unknown structure.
+\`ADD X22,X20,#16\` **forms an address**, rather than reading
+a pointer from that address. **Neither original X20 value nor
+the object/structure type is established.** A \`BL\` target
+coinciding with the FDE start proves a decoded code-edge in
+the original ELF, not that an independently symbol-resolved
+C++ \`createNovel\` method or any particular novel-command factory
+is definitely called there. These two branches may have
+different functional purposes despite sharing a FDE target.
+
+### Durable tools and limits
+
+- \`tools/inspect_native_novel_store_branch_selectors.py\`:
+  exact original conditional branch encoding, supported CFG
+  predecessor dominance, arm-to-first-store reachability,
+  \`CBZ/CBNZ\`, \`B.cond\`, \`TBZ/TBNZ\` register/bit metadata and
+  recognized test-register writer candidates
+- \`tools/inspect_native_novel_executor_callers.py\`:
+  exhaustive source-validated AArch64 executable direct
+  \`BL/B\` to one original FDE entry, separate validation of
+  every caller's unwind region and incoming X1 CFG writer;
+  one extra copy-source register hop
+- Synthetic tests reject unverified original FDE/source
+  claims, corrupt store instructions, incorrect branch
+  assignments and absent X1 sources. The actual client
+  binary was never checked in or emitted; owner scripts,
+  native keys and decrypted game content remain private.
+
+The source chain is now sufficiently narrow to prioritize
+**X20 in the two externally verified caller FDEs** for the
+next real dataflow check. No actual C++ object/vtable pointer
+has been recovered, no one of the **25 observed numeric
+opcodes** has a verified corresponding \`NovelCommand*\`
+constructor, and no original offline scene is playable.
+The importer still blocks the **12** remaining reference
+MD5 mismatches (7/19 repaired). PR #1 remains Draft; never
+merge or modify \`main\` or owner's original archives based
+on this evidence.
