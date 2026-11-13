@@ -45,18 +45,19 @@ jobs:
           apk="android/danmemore-preview/app/build/outputs/apk/debug/app-debug.apk"
           test -s "$apk"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$apk"
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$apk" | grep "package: name='dev.danmemore.preview'"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$apk" | grep "package: name='dev.danmemore.preview.v2'"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$apk" | grep "launchable-activity: name='dev.danmemore.preview.MainActivity'"
           if "$ANDROID_HOME/build-tools/35.0.0/aapt" dump permissions "$apk" | grep -q "android.permission.INTERNET"; then
             echo "Offline preview must not request network access" >&2
             exit 1
           fi
           mkdir -p dist
-          cp "$apk" dist/DanMemoRe-Offline-Preview-0.1.apk
-          sha256sum dist/DanMemoRe-Offline-Preview-0.1.apk | tee dist/SHA256SUMS.txt
+          cp "$apk" dist/DanMemoRe-Offline-Preview-0.2.apk
+          sha256sum dist/DanMemoRe-Offline-Preview-0.2.apk | tee dist/SHA256SUMS.txt
       - name: Upload verified APK to this workflow run
         uses: actions/upload-artifact@v4
         with:
-          name: DanMemoRe-Offline-Preview-APK
+          name: DanMemoRe-Offline-Preview-0.2-APK
           path: dist/
           if-no-files-found: error
           retention-days: 30
