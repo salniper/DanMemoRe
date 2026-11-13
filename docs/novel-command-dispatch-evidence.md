@@ -514,3 +514,72 @@ mismatches still block import, and PR #1 remains Draft with
 ARM64 writer/stack-slot memory-alias analysis or a disposable
 client runtime pointer trace before attempting any original
 script-handler mapping.
+
+
+## 11. CFG-normalized original stack-slot store candidates (2026-11-13)
+
+The next controlled original-client pass used the identical
+**SHA-1 pinned EU 15.1.0 XAPK** and independently SHA-256 authenticated
+ARM64 \`libapp.so\`. It examined the exact
+**33417424–33418848** ELF \`.text\` unwind region, using the existing
+bounded B/B.cond/CBZ/TBZ CFG and the seven previously discovered
+virtual-call-shaped \`BLR\` instructions.
+
+The new analyzer normalizes selected SP-relative accesses against
+**modeled stack-pointer adjustments** before associating 64-bit
+\`STR\`, \`STUR\`, \`STP\` (offset form) memory writes with the
+read/derived address. It correctly distinguishes a **load of a value
+from \`[SP,#offset]\`** from an **address calculation
+\`ADD Xn,SP,#offset\`**; an address calculation does not establish
+the identity of a stored object.
+
+[Actual original ELF stack-writer run](https://github.com/salniper/DanMemoRe/actions/runs/43371943073):
+
+| BLR call VA | Candidate origin | Entry-SP normalized offset | Recognized first stack-store candidates |
+| ---: | --- | ---: | --- |
+| 33417672 | \`LDR X24,[SP,#64]\` | -256 | **2** \`STP\` lanes at VA 33417588 (X20) and 33417612 (XZR/register 31) |
+| 33418076 | \`LDR X24,[SP,#80]\` | -240 | 0 found |
+| 33418388 | \`LDR X19,[SP,#120]\` | -200 | 0 found |
+| 33418712 | CFG-corrected \`LDR X21,[SP,#80]\` | -240 | 0 found |
+| 33418764 | \`ADD X20,SP,#32\` | -288 | 0 found; **this is an address, not a pointer read** |
+| 33418828 | \`LDR X20,[SP,#120]\` | -200 | 0 found |
+
+The seventh original \`BLR\` (VA 33418048) obtains its candidate
+object register via \`MOV X20,X1\` and therefore is **not a
+stack-slot read query** in this pass.
+
+Across the **six** stack-source queries, **one** has a supported
+first-store candidate set of two entries. The other **five** have
+no recognized incoming store under the current instruction whitelist.
+This is **not evidence that the stack slots are uninitialized**:
+writes may be 32-bit, NEON, pre/post-indexed, aliasing, through
+other pointers, outside this original FDE, or on control-flow edges
+the bounded CFG does not model.
+
+Crucially, the two \`STP\` candidates for call 33417672 may lie
+on different modeled paths; the report does **not** establish which
+value exists at the time of the call. A stack-slot address normalized
+relative to the entry SP is only meaningful within the modeled
+stack-delta analysis; it is not a recovered runtime address.
+
+New read-only files:
+- [\`tools/inspect_native_novel_stack_slots.py\`](../tools/inspect_native_novel_stack_slots.py):
+  bounded SP-offset propagation, exact instruction decoding,
+  CFG predecessor search for first recognized 64-bit stack stores,
+  with no native byte emission;
+- [\`tools/test_inspect_native_novel_stack_slots.py\`](../tools/test_inspect_native_novel_stack_slots.py):
+  synthetic branch-alternative, SP adjustment, STUR/STP/STR,
+  incorrect-memory-alias and fail-closed provenance tests.
+
+**Safety and status:** zero object-pointer values, vtable addresses,
+native handler constructor identities or numeric opcode mappings
+are verified. The importer still rejects the **12** remaining
+reference-MD5 mismatches; no original AYN Thor story playback,
+battle or gacha acceptance has occurred. PR #1 remains Draft and
+\`main\` and preserved owner archives are unchanged.
+
+**Most useful next work:** distinguish the two incoming \`STP\`
+write paths for normalized stack offset -256 and propagate the
+written X20/XZR source value with actual memory-flow constraints.
+The remaining stack slots require a wider store decoder and/or
+validated caller-side state before their provenance can be proven.
