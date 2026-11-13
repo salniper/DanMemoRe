@@ -583,3 +583,62 @@ write paths for normalized stack offset -256 and propagate the
 written X20/XZR source value with actual memory-flow constraints.
 The remaining stack slots require a wider store decoder and/or
 validated caller-side state before their provenance can be proven.
+
+
+
+## 12. Original SP+64 alternative stores: X1-derived X20 or XZR zero (2026-11-13)
+
+This pass follows the two previously observed \`STP\` candidates that
+can write the entry-SP-normalized offset \`-256\`, later consumed by
+\`LDR X24,[SP,#64]\` (call \`BLR\` VA 33417672). It intersects the
+authentic original EU 15.1.0 SHA-1/SHA-256-pinned CIE/FDE region
+with modeled CFG paths, checks the actual store instruction and
+whether a path remains to the load without a recognized intervening
+write to the same normalized stack slot, and traces the original
+source register of each store.
+
+[Actual authenticated original-client SP+64 store-path analysis](https://github.com/salniper/DanMemoRe/actions/runs/43373369267):
+
+| Original store VA | Store source | Modeled source provenance | Modeled path to load without recognized overwrite |
+| ---: | --- | --- | --- |
+| 33417588 | X20 | \`MOV X20,X1\` at VA **33417468** (X1 is an incoming register, not an identified game object) | **Yes** |
+| 33417612 | XZR (encoded register 31 in data-register position) | **Constant zero**, not an object pointer or authenticated vtable | **Yes** |
+
+These are **2 supported original CFG path candidates** from the two
+stores to the same later read. The X20 path traces to input register
+X1 by a recognizable earlier move; the XZR path explicitly provides
+zero. The existence of both modeled paths does not prove either
+path's actual execution, that they are the only possible runtime
+writes, or that their conditions are necessarily mutually exclusive.
+A store of zero is consistent with clearing a slot, but its intended
+control-flow semantics and actual use have **not** been proven.
+
+The new
+[\`tools/inspect_native_novel_stack_store_paths.py\`](../tools/inspect_native_novel_stack_store_paths.py)
+checks source instruction bytes internally against the SHA-pinned
+native, applies a bounded CFG successor search, rejects a candidate
+when a later recognized store to the same normalized slot blocks the
+path, and traces the stored source register to its recognized
+predecessor writer. It emits numeric addresses, register identifiers,
+and **no original native byte content, dialogue, ciphertext, keys or
+user assets**. Tests in
+[\`tools/test_inspect_native_novel_stack_store_paths.py\`](../tools/test_inspect_native_novel_stack_store_paths.py)
+include branch alternatives, earlier stores shadowed by later stores,
+forged source registers, wrong SP-normalized slots, fake CFI and
+the distinction between stack addresses and pointer loads.
+
+**Limits:** the model recognizes only a strict subset of AArch64
+stores and branches. Unmodeled memory aliasing, intervening
+unrecognized writes, exception edges, register clobbers, the
+actual X1 value and the memory contents of vtables are not
+known. None of the original 25 novel opcodes can be linked to
+a concrete handler by these findings. No reference hash check was
+waived, no original client story playback was performed and no
+AYN Thor gameplay acceptance is implied. PR remains Draft;
+**7/19** reference mismatches are exact-repaired and **12** remain.
+
+**Next decisive check:** determine the actual branch conditions
+that select the X1-derived versus zero-valued stack store and
+track the origin/meaning of incoming X1 at a verified call site.
+Only an evidence-based handler pointer or runtime-dispatched
+original command can justify a script playback implementation.
