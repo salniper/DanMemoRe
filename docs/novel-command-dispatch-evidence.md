@@ -441,3 +441,76 @@ disposable isolated original-client runtime trace of actual
 object and vtable values. Do not turn these register guesses into
 original gameplay logic. Original 12 reference-mismatched files
 remain blocked and PR stays Draft.
+
+
+## 10. Source-aware ARM64 CFG correction for original seven indirect calls (2026-11-13)
+
+**Significant evidence correction:** The former *linear nearest-writer*
+hypothesis about the object register **X21** at original BLR virtual
+address **33418712** is not on a first reaching-writer path in a
+newly implemented bounded intraprocedural ARM64 CFG. It therefore
+must not be used as the preferred object provenance, even in the
+earlier provisional table.
+
+After re-verifying the exact EU 15.1.0 XAPK SHA-1, pristine original
+\`libapp.so\` SHA-256 and the same independent CIE/FDE
+**33417424–33418848 (exclusive) / 356 AArch64 words** range, the
+new analyzer built internal control-flow edges for immediate B,
+B.cond, CBZ/CBNZ, TBZ/TBNZ, sequential fallthrough, BL/BLR returns,
+BR/RET exits. It traced *recognized* register-writer candidates
+backwards along modeled **reachable** predecessor edges from each
+of the seven original first object-pointer loads.
+
+[Original source authenticated CFG run](https://github.com/salniper/DanMemoRe/actions/runs/43371092421):
+
+- **325/356** instruction words are reachable from the FDE's first
+  word in the *supported CFG model*; **all 7 original indirect call
+  locations** are reached.
+- **1/7** previous linear nearest-writer hypotheses is **not** a
+  first reaching writer in the CFG: for X21 at call VA **33418712**,
+  the prior linear candidate \`LDR X21,[SP,#64]\` at VA **33418664**
+  is bypassed by the supported branch paths. The current modeled
+  first reaching candidate is \`LDR X21,[SP,#80]\` at VA **33418632**.
+- **1/7** previous single candidates must be **expanded to two**
+  modeled first reaching writers: X20 at call VA **33418764**
+  has both \`MOV X20,X1\` at VA **33417468** and
+  \`ADD X20,SP,#32\` at VA **33418172**.
+- The other **5/7** call sites each have one recognized
+  first reaching writer in the supported CFG model; none has a
+  verified original object pointer, vtable address, or class identity.
+
+This is a *path-sensitive static analysis improvement* over scanning
+linear preceding instructions, not a full register reaching-definition
+proof. It has important limitations:
+
+- Unrecognized AArch64 instructions may also write the tracked
+  register, so **one recognized writer is not proof of a unique
+  actual definition**.
+- The CFG assumes ordinary fallthrough after BL/BLR and does not
+  reconstruct indirect branch targets, exceptions, external entries
+  into the FDE, all AArch64 branch variants, aliasing, memory
+  contents or parameter effects.
+- A CFI-covered region need not be a semantically independent
+  single C++ function, and path reachability is not actual native
+  execution evidence.
+- Therefore a "refuted" linear candidate means **not a reaching
+  candidate in the bounded supported CFG**, not globally impossible
+  in any runtime/control environment.
+
+New read-only tools:
+\`tools/inspect_native_novel_cfg_paths.py\` and
+\`tools/test_inspect_native_novel_cfg_paths.py\`. Synthetic regressions
+cover unreachable nearer writers, branching with two incoming
+definitions, loops, forged BLR metadata, missing object sources and
+CFI provenance failures. Only instruction addresses, coarse
+whitelisted writer types and counts are emitted. No original binary
+bytes, decrypted game text, keys or private assets are committed.
+
+**Status unchanged:** no concrete runtime object/vtable value, no
+opcode-to-native-handler mapping (**0/25**), no actual original
+story playback or AYN Thor acceptance. The 12 reference-MD5
+mismatches still block import, and PR #1 remains Draft with
+\`main\` untouched. Next substantive work should be selective
+ARM64 writer/stack-slot memory-alias analysis or a disposable
+client runtime pointer trace before attempting any original
+script-handler mapping.
