@@ -48,3 +48,30 @@ python3 tools/stage_original_xapk_bootstrap33.py \
 3. 追查 Phase 3 的 1,544 個目錄差異：按類型和原版資產包歸類，先確認其中哪些實際缺失，不能直接推定 1,544 個檔案都不存在。
 
 **安全界線：PR 保持 Draft；主分支、已安裝 App、完整備份及其授權資料不變；原版遊戲可玩狀態仍未驗收。**
+
+
+## 2026-11-14｜實際擷取驗證與使用者待辦
+
+- **使用者明確表示：尚未下載資源恢復套件**。此工作列為 **待下載**，不可在報告中改記成已交付或已安裝，不需要求睡覺中的使用者操作。
+- 使用者尚未下載的檔案名稱：`DanMemoRe_Resource_Recovery_Pack_v1.zip`。本次容器已重新檢查 ZIP CRC，**11/11 成員通過**。SHA-256：`af8fd295752c57aff28d796e9b3ad719cb2d6766a99c2c7251e2775e1c3d8dfc`；套件含 7 份已驗證 Manifest、來源索引及缺口報告，**不含 33 個原始素材位元組**。
+- 新的 [原版 GitHub CI 實際擷取結果](https://github.com/salniper/DanMemoRe/actions/runs/43489490766)：**33/33 素材從雙重鎖定雜湊的 EU 15.1.0 XAPK 擷取到私有暫存資料夾，再逐檔驗證落盤 MD5；合計 3,323,167 bytes**。工作完成後暫存資料夾清除，不發佈原版素材的 Actions Artifact。這項成果證實工具可實際恢復原版檔案，但並不表示使用者的 14GB 備份或 AYN Thor 已恢復。
+- 新的 [`tools/restore_bootstrap33_pinned_local.py`](../tools/restore_bootstrap33_pinned_local.py) 提供使用者端一鍵來源取得與安全預驗證。預設唯讀；**只有主動加上 `--apply` 才會建立全新的 33 檔案 overlay**。傳送至掌機前仍需要使用者確認。
+- 再核對使用者提供的 19 份異常檔與原始稽核 JSON：**19/19 實際大小及 MD5 等於稽核登載的 actual 值**；其中 7 個 Manifest 已以獨立修復檔比對通過，剩餘 12 個對目標 reference MD5 依然不符。這只能證明檔案與稽核一致，不能推斷其內容可用或符合目標版本。
+- **剩餘主要阻塞**：12 個 reference 雜湊不符（4 Master、6 NovelCommand、2 視覺素材）；1,544 個 Phase 3 抽卡背景目錄差異仍未以使用者完整備份實體逐檔核對；原版遊戲尚未可玩。
+
+本機自動復原範例（在 DanMemoRe repo 根目錄，且輸出路徑原本不存在）：
+
+```sh
+# 只下載並驗證來源，不更動原始遊戲資料
+python3 tools/restore_bootstrap33_pinned_local.py \\
+  --index data/legacy-bootstrap-reference-33.json \\
+  --output /path/to/new-bootstrap33-overlay
+
+# 需使用者允許才可真的建立 33 檔案 overlay
+python3 tools/restore_bootstrap33_pinned_local.py \\
+  --index data/legacy-bootstrap-reference-33.json \\
+  --output /path/to/new-bootstrap33-overlay \\
+  --apply
+```
+
+注意：XAPK 來源是第三方下載鏡像，而非可驗證的發行者伺服器；必須同時通過事先固定的原版封裝 SHA-1 與原始 ARM64 native SHA-256，才能採用檔案。
