@@ -98,6 +98,25 @@ jobs:
           print("original_unwind_fde_index_entries=" + str(unwind["fde_index_entries"]))
           print("original_executor_unwind_covered_anchors=" +
                 str(unwind["exact_fde_coverage_count"]))
+          stack=report["original_executor_stack_store_sources"]
+          print("original_executor_stack_queries="+str(stack["stack_slot_queries"]))
+          print("original_executor_stack_queries_with_stores="+
+                str(stack["queries_with_recognized_store_candidates"]))
+          print("original_executor_stack_confirmed_vtables="+
+                str(stack["original_vtable_addresses_proven"]))
+          for q in stack["queried_sources"]:
+              print("original_executor_cfg_stack_store_candidate="+json.dumps({
+                  "call_va":q["call_va"],
+                  "source_writer_va":q["source_writer_va"],
+                  "mode":q["kind"],
+                  "slot_relative_to_SP":q["sp_relative_byte_offset_at_use"],
+                  "entry_SP_normalized_offset":q.get("entry_sp_normalized_byte_offset"),
+                  "status":q["status"],
+                  "stores":q["known_store_candidates"],
+                  "entry_without_known_store":q.get("entry_path_without_known_store"),
+                  "unknown_SP_write_count":q.get("unresolved_sp_offset_writes"),
+                  "value_proven":False,
+              },sort_keys=True))
           cfg=report["original_executor_cfg_object_paths"]
           print("original_executor_cfg_call_sites="+str(cfg["call_sites_checked"]))
           print("original_executor_cfg_linear_candidates_refuted="+
