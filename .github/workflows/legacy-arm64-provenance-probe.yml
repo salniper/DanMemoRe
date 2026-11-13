@@ -98,6 +98,22 @@ jobs:
           print("original_unwind_fde_index_entries=" + str(unwind["fde_index_entries"]))
           print("original_executor_unwind_covered_anchors=" +
                 str(unwind["exact_fde_coverage_count"]))
+          selector=report["original_executor_stack_store_branch_selectors"]
+          print("original_stack_selector_alternative_queries="+
+                str(selector["alternative_store_queries"]))
+          print("original_stack_selector_modeled_splits="+
+                str(selector["queries_with_modeled_selector"]))
+          print("original_stack_selector_proven_opcode_handlers="+
+                str(selector["numeric_opcode_handler_pairs_verified"]))
+          for q in selector["queries"]:
+              print("original_stack_selector_branch_evidence="+json.dumps({
+                  "call_va":q["call_va"],
+                  "load_va":q["source_load_va"],
+                  "store_vas":q["store_vas"],
+                  "status":q["status"],
+                  "selector_branch_candidates":q["selector_branch_candidates"],
+                  "physical_store_value_verified":False
+              },sort_keys=True))
           store_paths=report["original_executor_stack_store_paths"]
           print("original_novel_stack_path_queries="+str(store_paths["query_count"]))
           print("original_novel_stack_path_unclobbered_candidates="+
