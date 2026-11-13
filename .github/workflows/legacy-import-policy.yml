@@ -48,6 +48,8 @@ on:
       - "tools/test_inspect_native_novel_stack_slots.py"
       - "tools/inspect_native_novel_stack_store_paths.py"
       - "tools/test_inspect_native_novel_stack_store_paths.py"
+      - "tools/inspect_native_novel_store_branch_selectors.py"
+      - "tools/test_inspect_native_novel_store_branch_selectors.py"
       - "tools/probe_pristine_novel_dispatch.py"
       - "tools/verify_pristine_arm64_xapk.py"
       - "tools/test_verify_pristine_arm64_xapk.py"
@@ -139,6 +141,7 @@ jobs:
           python3 -m unittest discover -s tools -p 'test_inspect_native_novel_cfg_paths.py' -v
           python3 -m unittest discover -s tools -p 'test_inspect_native_novel_stack_slots.py' -v
           python3 -m unittest discover -s tools -p 'test_inspect_native_novel_stack_store_paths.py' -v
+          python3 -m unittest discover -s tools -p 'test_inspect_native_novel_store_branch_selectors.py' -v
 
   pristine-arm64-source-tests:
     runs-on: ubuntu-24.04
