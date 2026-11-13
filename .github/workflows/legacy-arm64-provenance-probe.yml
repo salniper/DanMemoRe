@@ -105,6 +105,35 @@ jobs:
                   },sort_keys=True))
           PY
 
+          # Restore each original Phase-1 asset into an EPHEMERAL private
+          # directory and independently recheck it on disk. Never upload
+          # proprietary original-resource bytes as Actions artifacts.
+          python3 tools/stage_original_xapk_bootstrap33.py \
+            --xapk "$candidate" \
+            --index data/legacy-bootstrap-reference-33.json \
+            --output "$local_dir/verified-bootstrap33" \
+            --apply > "$local_dir/bootstrap33_stage.json"
+
+          python3 - "$local_dir/bootstrap33_stage.json" <<'PY'
+          import json, os, sys
+          with open(sys.argv[1],encoding="utf-8") as file:
+              r=json.load(file)
+          if (r["status"]!="PARTIAL_ORIGINAL_BOOTSTRAP33_RESTORED_NOT_IMPORTABLE"
+                  or r["restored_resource_files"]!=33
+                  or r["original_archive_import_authorized"] is not False):
+              raise SystemExit("FAIL_CLOSED: original bootstrap 33 staging mismatch")
+          print("original_bootstrap33_ephemeral_files_recovered="+
+                str(r["restored_resource_files"]))
+          print("original_bootstrap33_ephemeral_total_bytes="+
+                str(r["total_resource_bytes"]))
+          print("original_bootstrap33_archive_import_allowed=False")
+          with open(os.environ["GITHUB_STEP_SUMMARY"],"a",encoding="utf-8") as summary:
+              summary.write("Original bootstrap staging: **33/33 exact "
+                            "reference assets written and verified in "
+                            "ephemeral runner only**; resource bytes "
+                            "not published, archived or installed.\\n")
+          PY
+
           # Independently SHA-pin the source, then search only ELF .text
           # for references to the *start* of original novel source-path labels.
           # Report function/class metadata and instruction offsets only.
