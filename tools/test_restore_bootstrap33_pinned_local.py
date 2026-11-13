@@ -87,15 +87,17 @@ class LocalSourceBootstrapTests(unittest.TestCase):
     def test_existing_owner_xapk_never_downloaded(self):
         source=self.root/"my.xapk"
         source.write_bytes(b"synthetic")
-        with patch.object(wrapper,"download_pinned_source") as download, (
-                patch.object(wrapper,"stage",return_value={
-                    "status":"SOURCE_EXACT_VERIFIED_DRY_RUN_NO_RESOURCE_FILES_WRITTEN",
-                    "restored_resource_files":0,
-                }) as stage):
+        with (
+            patch.object(wrapper,"download_pinned_source") as download,
+            patch.object(wrapper,"stage",return_value={
+                "status":"SOURCE_EXACT_VERIFIED_DRY_RUN_NO_RESOURCE_FILES_WRITTEN",
+                "restored_resource_files":0,
+            }) as staged,
+        ):
             result=wrapper.restore(index=self.root/"index",output=self.target,
                                    xapk=source,apply=False)
         download.assert_not_called()
-        stage.assert_called_once_with(source,self.root/"index",self.target,apply=False)
+        staged.assert_called_once_with(source,self.root/"index",self.target,apply=False)
         self.assertEqual(result["source_acquisition"],"EXISTING_OWNER_FILE")
         self.assertFalse(result["downloaded_temporary_source_retained"])
 
