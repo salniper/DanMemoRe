@@ -86,7 +86,7 @@ class NativeStackOriginTests(unittest.TestCase):
         self.assertEqual(stack._stack_write(word)[0]["offset"],-8)
 
     def test_stack_pointer_preindex_update_is_accounted(self):
-        stp=0xa9800000 | ((-32 & 127)<<15) | (30<<10) | (31<<5) | 29
+        stp=0xa9800000 | ((-4 & 127)<<15) | (30<<10) | (31<<5) | 29
         self.assertEqual(stack._sp_change(stp),-32)
 
     def test_address_of_stack_slot_is_not_pointer_load(self):
