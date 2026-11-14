@@ -347,3 +347,13 @@ python3 tools/assemble_reference_exact_recovery.py \
 6. 多次點擊 launch、復原時 App 被終止／重啟、空間不足、刪除或更名失敗：不重複派送啟動、不破壞目前的舊快取。
 
 **限制：** 上述檢查仍只是舊有 launcher marker/root 結構核對，**沒有重新對整份 14 GB 資源逐檔執行 MD5**，也**沒有實機遊戲測試**。依 `AGENTS.md` 不觸發 GitHub Actions、測試、Build、APK 安裝或 listener 重啟，故本輪修正狀態為 **SOURCE-ONLY / UNTESTED**。原版 12 個 MD5 不符檔案、1,544 張缺失抽卡原圖、未映射的劇情指令和完整戰鬥／抽卡／存檔驗收均維持未完成。原始備份、原有快取和 `main` 未動，PR #1 維持 Draft。
+
+## 2026-11-14｜匯入服務啟停生命週期的來源碼修正（尚未測試）
+
+繼續只修原版內容匯入的安全路徑，不修改遊戲預覽畫面、不安裝或套用原版內容。
+
+- `ContentImportService.onStartCommand()` 已取得匯入互斥旗標、但請求沒有提供 ZIP URI 時，原本直接 `stopSelf()`，沒有清除 `importing`；同一個 Service 執行個體若尚未被銷毀，後續有效匯入會被拒絕。現在失敗分支先重置旗標，再明確 `stopSelf(startId)`。
+- 背景匯入原本在 `importing.set(false)` 之後呼叫無條件 `stopSelf()`；若下一個請求剛取得新旗標，前一個任務可能停止新的服務啟動。現在先完成本輪前景通知清理，再釋放互斥旗標，使用 `stopSelf(startId)`，避免舊的啟動請求無條件終止較新的 startId。
+- 本次**只更新 Kotlin 來源碼**；依 `AGENTS.md` 封包實作階段規定，**沒有執行測試、建置、CI、APK 或真機驗收**。之後整合驗收應補「缺少 URI 後重新匯入」以及「相鄰兩個 startId 的非重疊停止」案例。
+
+原版資料狀態**完全沒有改變**：40 項 reference-exact overlay 已建立，但 12 個原版 MD5 不符資源與 1,544 張缺失抽卡背景尚未取得；不能宣稱原版劇情、戰鬥、抽卡與存檔已修復。PR #1 維持 Draft，不合併到 `main`，保留使用者原始封包與存檔。
