@@ -106,3 +106,9 @@ python3 tools/verify_remaining_legacy_candidates.py \\
 ```
 
 未對 `main`、既有備份、掌機或加密素材做任何修改；PR 保留 Draft。
+
+## 2026-11-14｜原版 XAPK 所有路徑之 size+MD5 精確搜尋
+
+過去比對 12 個異常資源時只看 **basename**，可能遺漏裝在其他路徑的相同位元組。新版 `audit_original_xapk_asset_candidates.py` 在所有內嵌 APK 安全 ZIP 成員中以 12 個目標 reference size 篩選，再以 MD5 驗證；維持原始 XAPK SHA-1 與 ARM64 native SHA-256 的驗證門檻。列出檔名相符與**任意檔名的完全相同位元組**兩類數量，未找到的檔案不得視為已恢復。新增改名精確命中、同長不同雜湊及掃描候選上限合成測試。
+
+本變更只在原 Draft PR 與隔離 CI 測試，沒有將私有原版位元組加入 Git、沒有修改使用者備份、沒有對 AYN Thor 安裝。原版 XAPK 執行結果以 CI 真實報告為準。
