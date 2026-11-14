@@ -288,3 +288,14 @@ python3 tools/assemble_reference_exact_recovery.py \
 補了四個**待執行**合成測試：40 檔在發現後被換包、對已解壓 14 GB 資料夾逐檔來源驗證、符號連結拒絕、原稽核來源錨點被更動後拒絕。依專案 `AGENTS.md` 的目前「封包尚未完成前不執行測試／Build／GitHub Actions」指示，**本輪沒有主動執行這些新增測試，也沒有執行原版遊戲或實機驗收**。提交僅為隔離 Draft PR 的修復程式碼與待執行驗證，不改 `main`、設備、原始快取或 40 檔已驗證套件。
 
 **真實剩餘阻塞不變：** 12 個 reference-MD5 不符的檔案仍待取得正確來源；1,544 張參考抽卡原圖尚未找到；原版劇情 25 個 opcode 仍無經證實的 native handler 對應，整體戰鬥、抽卡、存檔需另行驗收。公開 Reddit 保存者的「資料完整」回覆未附可驗證檔案，不能計算為已回收成果。
+
+
+## 2026-11-14｜已修正 ZIP／資料夾來源不對稱的輸出漏寫
+
+對前一輪 `tools/assemble_reference_exact_recovery.py` 逐行來源審查，發現一個**實際邏輯缺陷**：`stage_all()` 在 `member is None`（來自 `--candidate-dir`）分支讀回了候選資料，卻把最終 reference MD5 比對、建立輸出路徑和寫入檔案三步全部放在 `else`（只給 ZIP 成員）內。因此 **資料夾來源即使在掃描階段命中，也無法正確輸出修復檔案**；不能對先前版本聲稱完成來源資料夾 staging。
+
+現已把 `size`／`MD5` 二次比對和寫入共同移到兩個分支之後，無論來源是 ZIP 或直接解壓的 `contents`，都必須在暫存目錄寫入前與 reference size+MD5 完全一致。出錯時走原有 `try/except` 清理機制，不留半成品。既有**待執行** `test_exact_directory_contents_without_rezipping` 涵蓋成功建立 1,596 個原版路徑，另新增 `test_directory_candidate_mutated_after_discovery_is_not_staged`：候選目錄內同大小資料在掃描後變動，必須拒絕整個輸出並刪除暫存。
+
+**環境現況：** 本次查看 ChatGPT Library 最近 4 頁（800 條清單，尚有更多頁；而且遞迴 Google Drive Library 列表受限），有原始稽核 JSON、19 檔 payload、33+7 的 40 檔 v2 overlay，但未辨識到可存取的完整 **14 GB 六分卷 RAR 或解壓後 contents**。連結的 Drive 檔名搜尋 `contents-complete`、`DanMemoRe`、`com.eu.danmemo`、`MemoriaFreese`、`danmemo` 均未找到可用檔案，**這只是目前存取／搜尋範圍內的否定，不代表使用者本機沒有備份**。因此不能執行完整 14 GB 真實素材的唯讀查驗，也不能宣稱補回 12 個版本不符檔案或 1,544 張抽卡原圖。
+
+**本輪工作範圍：** 修正整合器程式碼＋補待執行回歸案例＋註明來源限制；遵守 `AGENTS.md`「封包實作未完成前不執行測試、建置或 GitHub Actions」要求，**沒有執行新增測試、沒有觸發手動 CI、沒有安裝 APK 或接觸使用者原始 RAR**。PR #1 仍 Draft，`main` 和裝置未動。完成全部資源來源驗證後仍需獨立通過 original runtime story/battle/gacha/save 驗收，絕不從檔案 MD5 自動推論遊戲可玩。
