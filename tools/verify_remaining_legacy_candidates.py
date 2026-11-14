@@ -36,6 +36,8 @@ MAX_FILE_BYTES = 32 * 1024 * 1024
 MAX_PAYLOAD_BYTES = 48 * 1024 * 1024
 MAX_ZIP_ENTRIES = 400_000
 MAX_SELECTED_ZIP_BYTES = MAX_PAYLOAD_BYTES
+MAX_DISCOVERY_ZIP_BYTES = 64 * 1024 * 1024
+MAX_DISCOVERY_PATH_SAMPLES = 8
 HASH = re.compile(r"^[0-9a-f]{32}$")
 
 
@@ -165,6 +167,78 @@ def zip_candidates(archive: Path) -> dict:
     return output
 
 
+def discover_zip_reference_bytes(audit: dict, archive: Path) -> dict:
+    """Discover exact reference bytes anywhere in a candidate ZIP, read-only.
+
+    File names are untrusted: exact target-size *and* reference MD5 must match.
+    This is a discovery report, not proof of independent provenance nor import
+    authorization. It deliberately emits only paths and counts, never content.
+    """
+    rows = audit_entries(audit)
+    if archive.is_symlink() or not archive.is_file():
+        raise ValueError("candidate ZIP must be a regular non-symlink file")
+    by_size = {}
+    for path in REMAINING:
+        ref = rows[path]
+        by_size.setdefault(ref["reference_size"], []).append(path)
+    matches = {path: [] for path in REMAINING}
+    old = {path: 0 for path in REMAINING}
+    total_bytes = 0
+    candidate_members = 0
+    with zipfile.ZipFile(archive, "r", allowZip64=True) as zf:
+        infos = zf.infolist()
+        if len(infos) > MAX_ZIP_ENTRIES:
+            raise ValueError("candidate ZIP has too many entries")
+        for info in infos:
+            if info.is_dir() or info.file_size not in by_size:
+                continue
+            name = info.filename
+            mode = info.external_attr >> 16
+            parts = name.split("/")
+            if (not name or name.startswith("/") or "\\" in name or
+                    any(part in ("", ".", "..") for part in parts) or
+                    info.flag_bits & 1 or stat.S_ISLNK(mode) or
+                    stat.S_IFMT(mode) not in (0, stat.S_IFREG)):
+                raise ValueError("unsafe size-matching ZIP member")
+            total_bytes += info.file_size
+            if total_bytes > MAX_DISCOVERY_ZIP_BYTES:
+                raise ValueError("size-filtered ZIP candidates exceed read bound")
+            candidate_members += 1
+            with zf.open(info, "r") as stream:
+                data = stream.read(info.file_size + 1)
+            if len(data) != info.file_size:
+                raise ValueError("ZIP candidate decompressed size mismatch")
+            digest = md5(data)
+            for path in by_size[info.file_size]:
+                if digest == rows[path]["reference_md5"]:
+                    matches[path].append(name)
+                elif digest == rows[path]["actual_md5"]:
+                    old[path] += 1
+    result = []
+    for path in REMAINING:
+        hits = matches[path]
+        result.append({
+            "target": path,
+            "reference_exact_hits": len(hits),
+            "sample_locations": hits[:MAX_DISCOVERY_PATH_SAMPLES],
+            "same_as_old_unverified_backup_hits": old[path],
+        })
+    return {
+        "verdict": "DISCOVERY_ONLY_NO_IMPORT_AUTHORIZATION",
+        "reference_exact_target_count": sum(bool(matches[p]) for p in REMAINING),
+        "checked_targets": len(REMAINING),
+        "candidate_zip_entries_hashed": candidate_members,
+        "candidate_uncompressed_bytes_hashed": total_bytes,
+        "targets": result,
+        "warning": (
+            "Exact size+MD5 locates candidate bytes, not their historical origin "
+            "or compatibility. A copy of the owner's archive is not independent "
+            "evidence. Never use this report to bypass import checks or modify "
+            "the game without separate source and runtime acceptance."
+        ),
+    }
+
+
 def format_probe(name: str, data: bytes) -> str:
     if name.endswith(".enc"):
         return "BLOCK_ALIGNED_ONLY" if data and len(data) % 16 == 0 else "NOT_16_BYTE_ALIGNED"
@@ -243,8 +317,14 @@ def main():
     source.add_argument("--payload", type=Path, help="locally saved 19-file JSON payload; read-only")
     source.add_argument("--candidates", type=Path, help="independent candidate contents root; read-only")
     source.add_argument("--candidate-zip", type=Path, help="local archive of candidate contents; exact paths only, no extraction")
+    source.add_argument("--scan-candidate-zip-all-paths", type=Path,
+                        help="read-only size+MD5 search across any ZIP path; no import authorization")
     args = parser.parse_args()
     audit = json.loads(args.audit.read_text(encoding="utf-8"))
+    if args.scan_candidate_zip_all_paths:
+        print(json.dumps(discover_zip_reference_bytes(
+            audit, args.scan_candidate_zip_all_paths), ensure_ascii=False, indent=2))
+        return
     if args.payload:
         candidates = payload_candidates(args.payload)
     elif args.candidates:
