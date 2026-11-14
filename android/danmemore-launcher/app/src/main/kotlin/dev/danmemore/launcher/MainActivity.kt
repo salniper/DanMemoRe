@@ -94,9 +94,28 @@ class MainActivity : ComponentActivity() {
         val idle = !running && !busy
         when (name) {
             "launch" -> {
+                if (busy) return
                 if (!installed(GAME_PACKAGE)) { message = "DanMemoRe game client is not installed"; return }
                 if (DanMemoContentCache.activeRoot(this) == null) {
-                    message = "Import the preserved contents ZIP before launching the game"
+                    // An interrupted import may have preserved the entire
+                    // previous cache but left 'active' absent/invalid. Restore
+                    // on the worker: deleting an invalid 14 GB tree must never
+                    // block the UI thread or be mistaken for a playable state.
+                    busy = true; message = "Checking the preserved offline content cache…"
+                    worker.execute {
+                        val restored = runCatching {
+                            DanMemoContentCache.restorePreviousForLaunch(this)
+                        }
+                        handler.post {
+                            busy = false
+                            restored.onSuccess { ok ->
+                                if (ok) action("launch", "")
+                                else message = "Import the preserved contents ZIP before launching the game"
+                            }.onFailure { error ->
+                                message = "Content recovery failed: ${error.message ?: error.javaClass.simpleName}"
+                            }
+                        }
+                    }
                     return
                 }
                 if (running) openGame() else {
