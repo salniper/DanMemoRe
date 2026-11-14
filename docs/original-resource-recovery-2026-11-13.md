@@ -364,3 +364,27 @@ python3 tools/assemble_reference_exact_recovery.py \
 本輪公開搜尋只找到未附可驗證檔案的 Reddit 保存者自述、與舊備份高度重疊的 Drive 目錄，以及與已釘選原 APK SHA-256 相同的第三方安裝包。**未找到並取得獨立、版本可追溯、可逐檔比對的新完整下載快取**，所以原始 12 個 reference-MD5 不符檔案及 1,544 張缺失抽卡背景原圖的實際補回數均為 **0**。官方日本記念 App 是另一種故事鑑賞用途，不能取代 EU 完整戰鬥／抽卡內容。
 
 下一個有效動作是取得保存者同意提供的匿名目錄、區域／版本／下載日期與精確檔案指紋，再使用既有只讀候選工具確認 size+MD5。並非再次下載同一份 APK 或鏡像。未聯絡保存者，未執行測試、Build 或 CI，PR 保持 Draft；不碰原始備份與 AYN Thor。
+
+
+## 2026-11-15｜更正 1,544 張 reference 背景的來源性質與 52 檔核心復原路徑
+
+**重要更正：前文多處把 1,544 張 Phase-3 背景描述成「原版 reference 原圖」，證據並不支持。** 專案 README 明載，2,236 張抽卡背景中有 692 張標記 archive，其餘 **1,544 張為離線版生成的帶文字替代圖**，且被打包到 Launcher、寫入離線使用的 Phase-3 manifest。LegacyImportPolicy.kt 也明確用 bundledGachaBackgrounds 准許該 1,544 項缺失；`ContentImportService.kt` 於 writePatches() 將它們寫入新 staging。故在 **Alpha-10 本地衍生 reference manifest** 比對這 1,544 個 size+MD5，僅能驗證「生成替代圖與本地參考版本完全一致」，**絕不能宣稱找回原廠 1,544 張圖片**。也不代表任一原始歷史版本一定有這 1,544 張同名圖。
+
+為避免此語義錯誤阻礙真正來源的復原，`tools/assemble_reference_exact_recovery.py` 已增加 **`--core-only`**：
+- 一般模式仍可要求 40+12+1544 共 **1,596 項本地 bundle-reference 完全相符**，但其 1,544 項是替代圖 reference，**不是原圖真偽判斷**；
+- 選用 `--core-only --apply --output-dir NEW_PATH` 時，僅在已驗證 40 項基礎資源且 **剩餘 12/12 項也都與原始 reference size+MD5 完全一致** 後，才允許建立獨立 **52 檔部分原版核心 overlay**。少一項都拒絕輸出，絕不以缺少抽卡圖片作為偽裝成功的理由；
+- 不論哪條路徑，輸出狀態都標記 `original_import_authorized=false`、`original_game_playable=false`、`publisher_original_gacha_art_authenticated=false`。不修改 launcher 的既有安全門檻，不自動匯入原始 14 GB，不安裝 APK、不改存檔、不合併 main。
+
+範例（先唯讀診斷；**目前尚未取得 12/12 正確來源，不能執行實際 52 檔輸出**）：
+
+```sh
+python3 tools/assemble_reference_exact_recovery.py \
+  --audit '/path/to/danmemore_legacy_audit 3(1).json' \
+  --verified40 '/path/to/DanMemoRe_Original_40_ByteExact_Overlay_v2.zip' \
+  --candidate-dir '/path/to/independent-extracted/contents' \
+  --core-only
+```
+
+因此仍須兩條**分開**的來源研究：其一，真正獨立的 12 個版本不符原始遊戲檔；其二，歷史原廠抽卡圖片的區域／版本／manifest 與來源證明，**不可用本地生成 fallback 的 MD5 當作原廠原圖的目標雜湊**。
+
+本輪在 Draft PR 補了兩個合成回歸案例，**只撰寫未執行**。依 AGENTS.md 不執行測試、Build、GitHub Actions 或實機驗收。本次沒有新增原版素材、12 個不符檔案仍未解決，任何可玩性結論不變。
