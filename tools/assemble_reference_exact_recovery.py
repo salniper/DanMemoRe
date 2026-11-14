@@ -125,7 +125,34 @@ def verify_base40(archive, groups):
     return len(expected)
 
 
-def discover(audit, overlay, archives):
+def read_direct_candidate(root, relative):
+    """Read an exact catalogue path from owner-extracted contents.
+
+    Does not enumerate the large game tree, follow symlinks or rewrite bytes.
+    """
+    if root.is_symlink() or not root.is_dir():
+        raise ValueError('candidate root must be a real directory')
+    path=root
+    for part in relative.split('/'):
+        if part in ('', '.', '..'):
+            raise ValueError('unsafe candidate path')
+        path=path/part
+        if path.is_symlink():
+            raise ValueError('symlink in candidate directory path')
+        if not path.exists():
+            return None
+    if not path.is_file():
+        raise ValueError('candidate path is not a regular file')
+    if path.stat().st_size>MAX_MEMBER:
+        raise ValueError('candidate file exceeds read bound')
+    with path.open('rb') as source:
+        raw=source.read(MAX_MEMBER+1)
+    if len(raw)>MAX_MEMBER:
+        raise ValueError('candidate changed or exceeds read bound')
+    return raw
+
+
+def discover(audit, overlay, archives, directories=()):
     groups=checks(audit)
     base_count=verify_base40(overlay,groups)
     target={**groups['remaining'],**groups['backgrounds']}
@@ -166,6 +193,26 @@ def discover(audit, overlay, archives):
                 for path,expected_md5 in possible:
                     if digest==expected_md5 and len(hits[path])<4:
                         hits[path].append((str(archive),name))
+    # Existing 14 GB owner extracts do not need to be repacked as a ZIP.
+    # Directory sources use exact paths; renamed candidates remain ZIP-only.
+    for directory in directories:
+        if directory.is_symlink() or not directory.is_dir():
+            raise ValueError('candidate directory must exist and be non-symlink')
+        for base in (directory, directory/'contents'):
+            if base.is_symlink():
+                raise ValueError('candidate contents root is a symlink')
+            if not base.is_dir():
+                continue
+            for name,(size,expected_md5) in target.items():
+                raw=read_direct_candidate(base,name)
+                if raw is None or len(raw)!=size:
+                    continue
+                total_bytes+=len(raw)
+                if total_bytes>MAX_BYTES_TO_HASH:
+                    raise ValueError('candidate read budget exceeded')
+                inspected+=1
+                if hashlib.md5(raw).hexdigest()==expected_md5 and len(hits[name])<4:
+                    hits[name].append((str(base),None))
     missing={key:sorted(path for path in group if not hits[path])
              for key,group in [('remaining',groups['remaining']),('backgrounds',groups['backgrounds'])]}
     result={
@@ -216,11 +263,16 @@ def stage_all(overlay, groups, hits, destination):
                 output.write_bytes(raw)
         for name in {**groups['remaining'],**groups['backgrounds']}:
             src,member=hits[name][0]
-            with zipfile.ZipFile(src) as z:
-                infos=[i for i in z.infolist() if i.filename==member]
-                if len(infos)!=1 or not safe_member(infos[0]):
-                    raise ValueError('source member ambiguous or unsafe')
-                raw=member_bytes(z,infos[0])
+            if member is None:
+                raw=read_direct_candidate(Path(src),name)
+                if raw is None:
+                    raise ValueError('candidate file disappeared since discovery')
+            else:
+                with zipfile.ZipFile(src) as z:
+                    infos=[i for i in z.infolist() if i.filename==member]
+                    if len(infos)!=1 or not safe_member(infos[0]):
+                        raise ValueError('source member ambiguous or unsafe')
+                    raw=member_bytes(z,infos[0])
                 size,md5=expected[name]
                 if len(raw)!=size or hashlib.md5(raw).hexdigest()!=md5:
                     raise ValueError('candidate changed since discovery')
@@ -246,13 +298,16 @@ def main():
     parser.add_argument('--audit',type=Path,required=True)
     parser.add_argument('--verified40',type=Path,required=True)
     parser.add_argument('--candidate-zip',type=Path,action='append',default=[])
+    parser.add_argument('--candidate-dir',type=Path,action='append',default=[],
+                        help='already-extracted contents directory, exact reference paths only')
     parser.add_argument('--output-dir',type=Path)
     parser.add_argument('--apply',action='store_true')
     args=parser.parse_args()
     if args.apply and not args.output_dir:
         parser.error('--apply requires --output-dir')
     audit=load_pinned_owner_inputs(args.audit,args.verified40)
-    groups,hits,report=discover(audit,args.verified40,args.candidate_zip)
+    groups,hits,report=discover(audit,args.verified40,
+                                args.candidate_zip,args.candidate_dir)
     if args.apply:
         if report['status']!='REFERENCE_EXACT_SOURCE_READY_STAGING_ONLY':
             raise ValueError('incomplete sources: refusing to write an invalid recovery overlay')
