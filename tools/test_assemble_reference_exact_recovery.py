@@ -98,6 +98,74 @@ class ExactRestorationTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,'overlay byte mismatch'):
                 recover.discover(audit,bad,[candidate])
 
+    def test_overlay_changed_after_discovery_is_not_copied(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            audit,overlay,candidate,_,_=fixture(root)
+            groups,hits,report=recover.discover(audit,overlay,[candidate])
+            self.assertEqual(report['status'],'REFERENCE_EXACT_SOURCE_READY_STAGING_ONLY')
+            entries={}
+            with zipfile.ZipFile(overlay) as z:
+                for name in z.namelist():
+                    entries[name]=z.read(name)
+            changed=next(iter(entries))
+            entries[changed]+=b'TAMPER_AFTER_DISCOVERY'
+            with zipfile.ZipFile(overlay,'w') as z:
+                for name,raw in entries.items():
+                    z.writestr(name,raw)
+            output=root/'must-not-be-written'
+            with self.assertRaisesRegex(ValueError,'overlay byte mismatch'):
+                recover.stage_all(overlay,groups,hits,output)
+            self.assertFalse(output.exists())
+
+    def test_exact_directory_contents_without_rezipping(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            audit,overlay,_,_,missing=fixture(root)
+            extracted=root/'extracted'
+            contents=extracted/'contents'
+            for name,raw in missing.items():
+                path=contents/name
+                path.parent.mkdir(parents=True,exist_ok=True)
+                path.write_bytes(raw)
+            groups,hits,report=recover.discover(audit,overlay,[],[extracted])
+            self.assertEqual(report['found_reference_exact_remaining'],12)
+            self.assertEqual(report['found_reference_exact_backgrounds'],1544)
+            output=root/'from-extracted-source'
+            recover.stage_all(overlay,groups,hits,output)
+            self.assertEqual((output/'1/files/font/number.png').read_bytes(),
+                             missing['1/files/font/number.png'])
+            self.assertEqual((output/'3/files/lottery/background/171000001.png').read_bytes(),
+                             missing['3/files/lottery/background/171000001.png'])
+
+    def test_directory_symlinks_are_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            audit,overlay,_,_,_=fixture(root)
+            contents=root/'contents'
+            contents.mkdir()
+            (contents/'1').symlink_to(root, target_is_directory=True)
+            with self.assertRaisesRegex(ValueError,'symlink'):
+                recover.discover(audit,overlay,[],[contents])
+
+    def test_pinned_owner_inputs_reject_altered_catalogue(self):
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            audit,overlay,_,_,_=fixture(root)
+            audit_path=root/'audit.json'
+            import json
+            audit_path.write_text(json.dumps(audit),encoding='utf-8')
+            owner_sha=hashlib.sha256(audit_path.read_bytes()).hexdigest()
+            overlay_sha=hashlib.sha256(overlay.read_bytes()).hexdigest()
+            with patch.object(recover,'PINNED_OWNER_AUDIT_SHA256',owner_sha), \\
+                 patch.object(recover,'PINNED_VERIFIED40_SHA256',overlay_sha):
+                self.assertEqual(len(recover.load_pinned_owner_inputs(
+                    audit_path,overlay)['issues']),1596)
+                audit_path.write_text(audit_path.read_text()+' ',encoding='utf-8')
+                with self.assertRaisesRegex(ValueError,'SHA-256'):
+                    recover.load_pinned_owner_inputs(audit_path,overlay)
+
     def test_traversal_match_is_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp)
