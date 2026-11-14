@@ -89,3 +89,20 @@ python3 tools/audit_phase3_lottery_background_files.py \\
 工具會針對稽核紀錄的 1,544 條 `3/files/lottery/background/*.png` 參考索引，逐檔以**實際檔案大小及 MD5**區分已驗證、缺少、版本不同或無法讀取；全程唯讀、不印出圖片內容、不移動檔案。
 
 **目前只完成分析器與合成測試，沒有取得使用者完整 14 GB 內容目錄，因此 1,544 個檔案的實體驗證結果仍然未知。**
+
+## 2026-11-14｜12 項異常檔的 ZIP 直接唯讀比對
+
+- 擴充 `tools/verify_remaining_legacy_candidates.py`，新增 `--candidate-zip`；可直接讀取本機的候選 ZIP 備份，**不需解壓 14 GB 內容，也不需下載復原套件**。
+- 僅允許精確的 12 個資源路徑（可選單一 `contents/` 前綴）；不接受 basename 猜測、重複目標、ZIP 內 symlink、加密成員或超出讀取上限的內容；不寫出任何原版遊戲位元組。
+- 獨立 ZIP 候選仍必須逐一符合 reference size+MD5；即使 12/12 全部符合，也**不等於通過原版匯入與實機驗收**。
+- 新增合成回歸測試，涵蓋參考完全一致、原備份版本不符、重複路徑、symlink、非精確路徑、索引與解壓大小限制。僅合成測試；**目前沒有取得第二份真實歷史備份，因此無新增通過驗證的原版資源**。
+
+在 repo 根目錄（**唯讀**）使用：
+
+```sh
+python3 tools/verify_remaining_legacy_candidates.py \\
+  --audit '/path/to/danmemore_legacy_audit.json' \\
+  --candidate-zip '/path/to/independent-contents.zip'
+```
+
+未對 `main`、既有備份、掌機或加密素材做任何修改；PR 保留 Draft。
