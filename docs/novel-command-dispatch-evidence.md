@@ -782,3 +782,32 @@ a prior local register definition or an opaque pointer. Follow
 actual external caller edges or validated native object
 constructor ownership, rather than treating all X0 uses as the
 same object.
+
+
+## 15. Pinned EU ARMv7 cross-ABI NovelCommand RTTI (2026-11-14)
+
+**Source inspection completed; no gameplay test or original opcode mapping claimed.** The previously preserved [EU 2023-12-22 APK](https://drive.google.com/file/d/1KMT429Dr15OyKtWv16FumBY0CyXoi8de/view) was opened read-only in an isolated environment. Its SHA-256 exactly matched the previously pinned project source:
+
+- Original APK SHA-256: \`36713f18a6e9fec3302384b8d67383b12761f782d73932cb62b31b230053c3b6\`.
+- \`lib/armeabi-v7a/libapp.so\` (46,522,684 bytes) SHA-256: \`2a1ad4cafd41252bae3e105b885adb66cd2158ecc9a275b5c5098b3a74108457\`.
+- ELF32 little-endian ARM, Android NDK r20 BuildID \`520337003949972bbf77c771a43f0b09547e0787\`, binary stripped; native source logging also includes \`NovelCommandExecuter::createNovel\` and original \`NovelCommand*\` class names.
+
+The original \`.rodata\` contains **55 distinct length-valid Itanium C++ type-name strings** matching \`N6toybox3gui<length>NovelCommand*E\`, each NUL-terminated and each with **exactly one aligned 32-bit type-name reference in \`.data.rel.ro\`**. These are code-structure/type information facts, **not** numeric command-to-class mappings, constructor call targets or verified playback.
+
+Compare with the **34 source-log-derived class names** currently recorded in [\`data/danmemore-novel-opcode-evidence.json\`](../data/danmemore-novel-opcode-evidence.json) from the separate pristine EU ARM64 binary:
+
+| Cross-ABI *recorded name sets* | Unique class names |
+| --- | ---: |
+| ARMv7 RTTI names authenticated now | **55** |
+| Previously recorded ARM64 source-log names | **34** |
+| Names present in both recorded sets | **27** |
+| ARMv7 RTTI names absent from the narrower ARM64 list | **28** |
+| ARM64 source-log names absent from this ARMv7 RTTI list | **7** |
+
+**Do not interpret the set differences as proof that a class is absent in the other ABI.** The two collection methods are different (ARMv7 RTTI versus ARM64 debug/source strings), and the compilers may retain different metadata. The additional ARMv7 RTTI names include \`NovelCommandBgmStart\`, \`NovelCommandBgmStop\`, \`NovelCommandScreenFlush\`, \`NovelCommandSceneChangeStart\`, \`NovelCommandTalkClose\`, \`NovelCommandTimeDelay\`, \`NovelCommandCharacterAppear\`, \`NovelCommandImageSet\`, \`NovelCommandVolumeSet\`, \`NovelCommandCompleteMission\` and \`NovelCommandBattleSimulate\`. Their existence does not prove any of those operations appears in the six original mismatched scripts.
+
+Added [\`tools/inspect_original_armv7_novel_rtti.py\`](../tools/inspect_original_armv7_novel_rtti.py) for reproducible **local, read-only** source-authenticated ELF32 section parsing, bounded APK extraction and name-pointer enumeration. The tool checks both pinned SHA-256 values and fails closed on unexpected/duplicate names or missing data references. It never emits original APK/native bytes, decrypted story, keys, user saves, reconstructed script content or inferred numeric opcode mappings. **New script has not undergone the project-wide deferred test suite**; the preceding 55-reference finding comes from the separate direct forensic inspection of the actual pinned original bytes, not from asserting the script was tested.
+
+**Status:** numeric opcode → original C++ handler mapping **0/25 still unverified**; six script reference-MD5 mismatches and the larger offline game/save/battle/gacha acceptance barriers still exist. Next substantive reverse-engineering check is to trace the original ARMv7 \`createNovel\` constructor-selection code and its class RTTI/vtable relationships, correlate with the authenticated ARM64 call graph, and require a provable opcode value reaching a constructor before registering any mapping. Do not convert a plausible class name into playable story behavior by guesswork.
+
+PR remains Draft; no \`main\` update, Git-tracked proprietary source blobs, emulator execution, AYN Thor installation or modification of the owner's 14 GB backup.
