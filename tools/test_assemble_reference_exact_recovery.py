@@ -66,7 +66,7 @@ class ExactRestorationTests(unittest.TestCase):
             result=root/'new-overlay'
             recover.stage_all(overlay,groups,hits,result)
             files=[x for x in result.rglob('*') if x.is_file()]
-            self.assertEqual(len(files),1597) # 1596 exact originals + one status
+            self.assertEqual(len(files),1597) # 1596 bundle-reference items (including fallback cards) + status
             self.assertEqual((result/'1/files/ui_atlas/fixture/fixture_00.json').read_bytes(),
                              base['1/files/ui_atlas/fixture/fixture_00.json'])
             self.assertEqual((result/'3/files/lottery/background/171000001.png').read_bytes(),
@@ -82,9 +82,53 @@ class ExactRestorationTests(unittest.TestCase):
             groups,hits,report=recover.discover(audit,overlay,[])
             self.assertEqual(report['found_reference_exact_remaining'],0)
             self.assertEqual(report['missing_reference_exact_background_count'],1544)
-            with self.assertRaisesRegex(ValueError,'not all 1556'):
+            with self.assertRaisesRegex(ValueError,'not all requested reference-exact'):
                 recover.stage_all(overlay,groups,hits,root/'should-not-exist')
             self.assertFalse((root/'should-not-exist').exists())
+
+
+    def test_core_52_stages_without_generated_banner_cards(self):
+        # A separate independent cache can supply the twelve original-content
+        # blockers without including our generated 1544 banner fallback cards.
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            audit,overlay,candidate,base,missing=fixture(root)
+            only_original_blockers=root/'only-12.zip'
+            with zipfile.ZipFile(candidate) as src,zipfile.ZipFile(only_original_blockers,'w') as out:
+                for info in src.infolist():
+                    if '/lottery/background/' not in info.filename:
+                        out.writestr(info.filename,src.read(info))
+            groups,hits,report=recover.discover(audit,overlay,[only_original_blockers])
+            self.assertEqual(report['found_reference_exact_remaining'],12)
+            self.assertTrue(report['reference_exact_core_52_ready'])
+            self.assertEqual(report['found_reference_exact_backgrounds'],0)
+            self.assertFalse(report['publisher_original_gacha_art_authenticated'])
+            self.assertEqual(report['status'],'INCOMPLETE_REFERENCE_SOURCES_NOT_IMPORTABLE')
+            with self.assertRaisesRegex(ValueError,'not all requested reference-exact'):
+                recover.stage_all(overlay,groups,hits,root/'must-not-full-stage')
+            output=root/'separate-core-only'
+            recover.stage_all(overlay,groups,hits,output,include_backgrounds=False)
+            self.assertEqual(len([p for p in output.rglob('*') if p.is_file()]),53)
+            self.assertFalse((output/'3/files/lottery/background').exists())
+            self.assertEqual((output/'1/files/font/number.png').read_bytes(),
+                             missing['1/files/font/number.png'])
+            import json
+            status=json.loads((output/'RESTORE_STATUS.json').read_text(encoding='utf-8'))
+            self.assertEqual(status['overlay_scope'],'CORE_52_ONLY')
+            self.assertFalse(status['original_import_authorized'])
+            self.assertFalse(status['original_game_playable'])
+            self.assertFalse(status['publisher_original_gacha_art_authenticated'])
+
+    def test_core_52_refuses_missing_original_content_blockers(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            audit,overlay,_,_,_=fixture(root)
+            groups,hits,report=recover.discover(audit,overlay,[])
+            self.assertFalse(report['reference_exact_core_52_ready'])
+            output=root/'not-complete'
+            with self.assertRaisesRegex(ValueError,'not all requested reference-exact'):
+                recover.stage_all(overlay,groups,hits,output,include_backgrounds=False)
+            self.assertFalse(output.exists())
 
     def test_corrupt_overlay_is_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
