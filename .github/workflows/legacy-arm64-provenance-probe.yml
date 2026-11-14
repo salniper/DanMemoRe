@@ -53,10 +53,20 @@ jobs:
           print("original_xapk_nested_apks=" + str(audit["nested_apk_count"]))
           print("reference_exact_asset_targets_in_original_xapk=" +
                 str(audit["reference_exact_target_count"]))
+          print("reference_exact_asset_targets_any_member_name=" +
+                str(audit["reference_exact_target_count_any_name"]))
+          print("size_filtered_members_hashed=" +
+                str(audit["size_filtered_zip_entries_hashed"]))
           with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
               summary.write("Exact legacy asset candidates in authenticated original EU XAPK: " +
                             str(audit["reference_exact_target_count"]) + " / 12.\n")
           for path, record in audit["targets"].items():
+              if record["reference_exact_any_name_occurrences"]:
+                  print("reference_exact_any_member_name=" + json.dumps({
+                      "path": path,
+                      "count": record["reference_exact_any_name_occurrences"],
+                      "locations": record["reference_exact_any_name_locations"],
+                  }, sort_keys=True))
               if record["basename_occurrences"]:
                   print("original_xapk_asset_candidate=" + json.dumps({
                       "path": path,
