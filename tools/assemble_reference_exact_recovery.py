@@ -273,11 +273,13 @@ def stage_all(overlay, groups, hits, destination):
                     if len(infos)!=1 or not safe_member(infos[0]):
                         raise ValueError('source member ambiguous or unsafe')
                     raw=member_bytes(z,infos[0])
-                size,md5=expected[name]
-                if len(raw)!=size or hashlib.md5(raw).hexdigest()!=md5:
-                    raise ValueError('candidate changed since discovery')
-                output=tmp/name; output.parent.mkdir(parents=True,exist_ok=True)
-                output.write_bytes(raw)
+            # Both directory and ZIP candidates must pass exactly the same
+            # immutable reference gate immediately before they are written.
+            size,md5=expected[name]
+            if len(raw)!=size or hashlib.md5(raw).hexdigest()!=md5:
+                raise ValueError('candidate changed since discovery')
+            output=tmp/name; output.parent.mkdir(parents=True,exist_ok=True)
+            output.write_bytes(raw)
         (tmp/'RESTORE_STATUS.json').write_text(json.dumps({
             'verified_reference_exact_file_count':len(expected),
             'original_import_authorized':False,
