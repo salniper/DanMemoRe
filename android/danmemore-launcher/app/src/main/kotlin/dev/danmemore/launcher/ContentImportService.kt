@@ -120,6 +120,11 @@ private class ContentImporter(private val context: Context) {
         cacheRoot.mkdirs()
         check(cacheRoot.isDirectory) { "could not create the private content cache" }
 
+        // Make an interrupted previous import recoverable BEFORE reading a
+        // possibly huge new ZIP. The launcher may otherwise have no active
+        // resources until another full archive import finishes.
+        recoverInterruptedActivation(active, previous)
+
         val archiveBytes = context.contentResolver.openAssetFileDescriptor(uri, "r")?.use { it.length }.takeIf { it != null && it > 0L }
         if (archiveBytes != null) {
             val available = StatFs(cacheRoot.absolutePath).availableBytes
@@ -152,27 +157,6 @@ private class ContentImporter(private val context: Context) {
                 Charsets.UTF_8,
             )
 
-            // Recover an interrupted prior activation before rotating any
-            // more cache directories. If an invalid new active cache exists,
-            // the preserved previous cache must win over the broken one.
-            if (previous.exists()) {
-                if (!active.exists()) {
-                    check(previous.renameTo(active)) {
-                        "could not restore the cache preserved by the interrupted import"
-                    }
-                } else if (DanMemoContentCache.activeRoot(context) != null) {
-                    check(previous.deleteRecursively()) {
-                        "could not remove a stale previous content cache"
-                    }
-                } else {
-                    check(active.deleteRecursively()) {
-                        "invalid active cache could not be removed; previous cache retained"
-                    }
-                    check(previous.renameTo(active)) {
-                        "could not restore previous content cache after interrupted import"
-                    }
-                }
-            }
             val hadActive = active.exists()
             if (hadActive) {
                 check(active.renameTo(previous)) { "could not preserve the active content cache" }
@@ -210,6 +194,30 @@ private class ContentImporter(private val context: Context) {
             throw error
         } finally {
             sourceArchive.delete()
+        }
+    }
+
+    private fun recoverInterruptedActivation(active: File, previous: File) {
+        if (!previous.exists()) return
+        if (!active.exists()) {
+            check(previous.renameTo(active)) {
+                "could not restore the cache preserved by the interrupted import"
+            }
+        } else if (DanMemoContentCache.activeRoot(context) != null) {
+            // Only discard a leftover previous snapshot when the new cache
+            // already passes its normal active-root validation.
+            check(previous.deleteRecursively()) {
+                "could not remove a stale previous content cache"
+            }
+        } else {
+            // This may be the half-activated directory from a failed import.
+            // Never delete .previous first while the active root is invalid.
+            check(active.deleteRecursively()) {
+                "invalid active cache could not be removed; previous cache retained"
+            }
+            check(previous.renameTo(active)) {
+                "could not restore previous content cache after interrupted import"
+            }
         }
     }
 
