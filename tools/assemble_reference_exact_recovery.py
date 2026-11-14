@@ -20,7 +20,32 @@ import zipfile
 MAX_ENTRIES = 500_000
 MAX_MEMBER = 32 * 1024 * 1024
 MAX_BYTES_TO_HASH = 2 * 1024 * 1024 * 1024
+# These refer to actual owner-supplied audit and the previously verified v2
+# overlay, not a generic or reformattable JSON catalogue.
+PINNED_OWNER_AUDIT_SHA256 = 'fd929c2ace550fe2b7a59dcff7294be756b29adcf81f92aadd89849b3c5c6f4c'
+PINNED_VERIFIED40_SHA256 = 'df39400c3f664546332cb77087373249399a675b878eb460715c8a0f62b40780'
 MD5 = re.compile(r'[0-9a-f]{32}\Z')
+
+
+def load_pinned_owner_inputs(audit_path, overlay_path):
+    """Fail closed when either provenance anchor differs from the received files.
+
+    Only the command-line intake uses this pin; synthetic unit fixtures
+    intentionally exercise the pure discovery functions without owner bytes.
+    """
+    for path, expected, label in (
+        (audit_path, PINNED_OWNER_AUDIT_SHA256, 'owner audit'),
+        (overlay_path, PINNED_VERIFIED40_SHA256, 'verified 40-file overlay'),
+    ):
+        if path.is_symlink() or not path.is_file():
+            raise ValueError(label + ' is missing or a symlink')
+        h = hashlib.sha256()
+        with path.open('rb') as src:
+            for part in iter(lambda: src.read(1024 * 1024), b''):
+                h.update(part)
+        if h.hexdigest() != expected:
+            raise ValueError(label + ' SHA-256 differs from the pinned original')
+    return json.loads(audit_path.read_text(encoding='utf-8'))
 
 
 def checks(audit):
@@ -56,6 +81,8 @@ def checks(audit):
             raise ValueError('reference and historical fingerprints disagree')
         groups[group][path]=(size,md5)
     expected = {'bootstrap':33,'phase_manifests':7,'remaining':12,'backgrounds':1544}
+    if len({path for group in groups.values() for path in group}) != sum(expected.values()):
+        raise ValueError('duplicate path across recovery classes')
     if {k:len(v) for k,v in groups.items()} != expected:
         raise ValueError('unexpected recovery population')
     return groups
@@ -163,6 +190,9 @@ def stage_all(overlay, groups, hits, destination):
     expected={**groups['bootstrap'],**groups['phase_manifests'],**groups['remaining'],**groups['backgrounds']}
     if any(path not in hits or not hits[path] for path in {**groups['remaining'],**groups['backgrounds']}):
         raise ValueError('not all 1556 missing references have exact candidate bytes')
+    # Recheck after discovery: an altered 40-file ZIP must NEVER be copied
+    # merely because its pathname was already verified once.
+    verify_base40(overlay, groups)
     if destination.is_symlink() or destination.exists():
         raise ValueError('destination must be a new nonexisting directory')
     if not destination.parent.is_dir() or destination.parent.is_symlink():
@@ -173,8 +203,15 @@ def stage_all(overlay, groups, hits, destination):
     tmp=Path(tempfile.mkdtemp(prefix='.danmemore-exact-',dir=parent))
     try:
         with zipfile.ZipFile(overlay) as z:
-            for name in {**groups['bootstrap'],**groups['phase_manifests']}:
-                raw=z.read(name)
+            for name, (size, expected_md5) in {
+                **groups['bootstrap'], **groups['phase_manifests']
+            }.items():
+                matches=[info for info in z.infolist() if info.filename == name]
+                if len(matches)!=1 or not safe_member(matches[0]) or matches[0].file_size!=size:
+                    raise ValueError('40-file source changed during staging: '+name)
+                raw=member_bytes(z,matches[0])
+                if len(raw)!=size or hashlib.md5(raw).hexdigest()!=expected_md5:
+                    raise ValueError('40-file source fingerprint changed during staging: '+name)
                 output=tmp/name; output.parent.mkdir(parents=True,exist_ok=True)
                 output.write_bytes(raw)
         for name in {**groups['remaining'],**groups['backgrounds']}:
@@ -214,8 +251,8 @@ def main():
     args=parser.parse_args()
     if args.apply and not args.output_dir:
         parser.error('--apply requires --output-dir')
-    groups,hits,report=discover(json.loads(args.audit.read_text(encoding='utf-8')),
-                                args.verified40,args.candidate_zip)
+    audit=load_pinned_owner_inputs(args.audit,args.verified40)
+    groups,hits,report=discover(audit,args.verified40,args.candidate_zip)
     if args.apply:
         if report['status']!='REFERENCE_EXACT_SOURCE_READY_STAGING_ONLY':
             raise ValueError('incomplete sources: refusing to write an invalid recovery overlay')
