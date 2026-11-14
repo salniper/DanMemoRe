@@ -224,5 +224,64 @@ class CandidateAuditTests(unittest.TestCase):
             checker.MAX_SELECTED_ZIP_BYTES = old
 
 
+    def test_discover_renamed_reference_exact_and_old_backup(self):
+        archive = self.root / "independent.zip"
+        exact = checker.STORIES[0]
+        old = checker.PNG
+        with zipfile.ZipFile(archive, "w") as zf:
+            zf.writestr("export/renamed.story", self.reference[exact])
+            zf.writestr("unrelated/number_from_backup.bin", self.original[old])
+            zf.writestr("unrelated/file.bin", b"unrelated data")
+        sha = hashlib.sha256(archive.read_bytes()).hexdigest()
+        report = checker.discover_zip_reference_bytes(self.audit, archive)
+        targets = {r["target"]: r for r in report["targets"]}
+        self.assertEqual(report["reference_exact_target_count"], 1)
+        self.assertEqual(report["candidate_zip_entries_hashed"], 2)
+        self.assertEqual(targets[exact]["reference_exact_hits"], 1)
+        self.assertEqual(targets[exact]["sample_locations"], ["export/renamed.story"])
+        self.assertEqual(targets[old]["same_as_old_unverified_backup_hits"], 1)
+        self.assertEqual(targets[old]["reference_exact_hits"], 0)
+        self.assertEqual(report["verdict"], "DISCOVERY_ONLY_NO_IMPORT_AUTHORIZATION")
+        self.assertEqual(hashlib.sha256(archive.read_bytes()).hexdigest(), sha)
+
+    def test_discover_rejects_unsafe_size_matching_path(self):
+        archive = self.root / "unsafe.zip"
+        data = self.reference[checker.STORIES[0]]
+        with zipfile.ZipFile(archive, "w") as zf:
+            zf.writestr("../malicious.enc", data)
+        with self.assertRaisesRegex(ValueError, "unsafe size-matching"):
+            checker.discover_zip_reference_bytes(self.audit, archive)
+
+    def test_discover_rejects_symlink_matching_asset(self):
+        archive = self.root / "symlink-discovery.zip"
+        entry = zipfile.ZipInfo("other/asset")
+        entry.create_system = 3
+        entry.external_attr = 0o120777 << 16
+        with zipfile.ZipFile(archive, "w") as zf:
+            zf.writestr(entry, self.reference[checker.STORIES[0]])
+        with self.assertRaisesRegex(ValueError, "unsafe size-matching"):
+            checker.discover_zip_reference_bytes(self.audit, archive)
+
+    def test_discover_rejects_too_many_decompressed_bytes(self):
+        archive = self.root / "bounded.zip"
+        with zipfile.ZipFile(archive, "w") as zf:
+            zf.writestr("alternate/name.enc", self.reference[checker.STORIES[0]])
+        budget = checker.MAX_DISCOVERY_ZIP_BYTES
+        try:
+            checker.MAX_DISCOVERY_ZIP_BYTES = 1
+            with self.assertRaisesRegex(ValueError, "read bound"):
+                checker.discover_zip_reference_bytes(self.audit, archive)
+        finally:
+            checker.MAX_DISCOVERY_ZIP_BYTES = budget
+
+    def test_discover_rejects_changed_reference_catalogue(self):
+        archive = self.root / "known.zip"
+        with zipfile.ZipFile(archive, "w") as zf:
+            zf.writestr("renamed.dat", self.reference[checker.STORIES[0]])
+        self.audit["issues"][0]["historical_md5"] = "0" * 32
+        with self.assertRaisesRegex(ValueError, "incompatible audit MD5s"):
+            checker.discover_zip_reference_bytes(self.audit, archive)
+
+
 if __name__ == "__main__":
     unittest.main()
