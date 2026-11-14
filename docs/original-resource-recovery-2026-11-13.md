@@ -118,3 +118,18 @@ python3 tools/verify_remaining_legacy_candidates.py \\
 [GitHub Actions 原始 EU 15.1.0 XAPK 實測](https://github.com/salniper/DanMemoRe/actions/runs/43566946806) 已完成並成功驗證來源（`ORIGINAL_ARM64_VERIFIED`）。搜尋全部六個內嵌 APK 的安全 ZIP 成員，按剩餘 12 個 reference size 篩選，合計 **2 個**大小符合的 ZIP 成員進入 MD5 比對；**0/12** 目標在任意路徑找到 reference size+MD5 完全一致的檔案。原本的 basename 精確搜尋也仍是 **0/12**。
 
 這是**實際原始安裝包 ZIP 成員**的排除結果，不是全部遊戲內容來源的否定：歷史安裝後下載的完整快取、OBB、其他 container 格式、其他版本區域仍未掃到。下一步必須取得**獨立、版本可溯源的完整遊戲快取／歷史來源**，逐項驗證 12 個目標；不可將同一份備份的鏡像認作獨立來源，也不可用這個陰性結果放寬 MD5 import gate。遊戲素材位元組沒有提交或散佈。
+
+## 2026-11-14｜獨立完整快取來源盤點（下一輪）
+
+- 社群公開討論：[DanMemo 資料保存協尋](https://www.reddit.com/r/DanmachiMemoriaFreese/comments/1ws4zzo/does_anyone_still_have_downloaded_danmemo_game/)（2026-09-28）。留言中一位使用者表示保存完整下載資料，**尚未提供可驗證檔案、版本或 SHA**，不得計入已恢復成果。
+- 討論提供的 [公開 Google Drive 備份資料夾](https://drive.google.com/drive/folders/1xqzfdevOO7ph1ppck9t8TiwzJVXpr4Yb) 已實際唯讀檢視元資料：有 1～8 phase、`cache`、`voice_root` 等子目錄，並含 `com.eu.danmemo_2023-12-22.apk`（80,881,609 bytes）、`1/master/divide_enc`、`1/master/divide_novel_command_enc`、`1/files/font/number.png`（7,381 bytes）。這與目前專案使用的歷史公開保存來源高度重疊，**不能直接視為獨立第二套備份**；同大小更不代表 reference MD5 相符。
+- 工具 `tools/verify_remaining_legacy_candidates.py` 增加 `--scan-candidate-zip-all-paths`：不解壓大型 ZIP，依稽核 JSON 的 12 個 reference size 篩選任何路徑，再比對 MD5；輸出每一個目標的完全相符檔案路徑（上限 8 個）、舊版相同位元組的命中數，**絕不更改 importer 或宣稱獨立來源已認證**。限制 ZIP entries、危險路徑、符號連結、加密及展開總位元組；包含合成拒絕測試。
+- 使用方式：
+
+```sh
+python3 tools/verify_remaining_legacy_candidates.py \\
+  --audit '/path/to/danmemore_legacy_audit.json' \\
+  --scan-candidate-zip-all-paths '/path/to/other-preserved-cache.zip'
+```
+
+**驗證界線：** 只有取得版本、日期可溯源且與目前資料不共用同一保存副本的候選來源，才能宣稱「獨立」；即使比對出 reference MD5，也不能跳過完整匯入及 AYN Thor 真機驗收。這一輪沒有取得第二份可驗證完整快取，故剩餘 12 個維持未解決。
