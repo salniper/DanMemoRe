@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 """Conservative offline intake for exact DanMemoRe original resources.
 
-Inputs are the owner's audit, a 40-file verified overlay, and zero or more
-independent candidate ZIPs. No originals are modified. Only a complete exact
-40+12+1544 set can be staged, and even that is NOT game acceptance.
+Inputs are the owner's audit, a 40-file verified overlay, and candidate
+ZIPs/directories. No originals are modified. The 1,544 generated banner
+fallbacks in the bundled reference are NOT authenticated publisher artwork.
+By default all 1,596 bundled-reference files are needed for staging;
+--core-only stages only 40+12 exact core files when all twelve are recovered.
+Neither result authorizes original game import or gameplay acceptance.
 """
 from __future__ import annotations
 import argparse
@@ -215,9 +218,15 @@ def discover(audit, overlay, archives, directories=()):
                     hits[name].append((str(base),None))
     missing={key:sorted(path for path in group if not hits[path])
              for key,group in [('remaining',groups['remaining']),('backgrounds',groups['backgrounds'])]}
+    core_ready = not missing['remaining']
+    # The manifest's 1,544 replacement-card fingerprints are locally generated,
+    # not independently authenticated publisher artwork. Keep this distinction
+    # explicit instead of calling those reference MD5s "original gacha art".
     result={
         'status':'REFERENCE_EXACT_SOURCE_READY_STAGING_ONLY' if not any(missing.values()) else 'INCOMPLETE_REFERENCE_SOURCES_NOT_IMPORTABLE',
         'verified_base_overlay_files':base_count,
+        'reference_exact_core_52_ready':core_ready,
+        'bundle_fallback_backgrounds_are_original_art':False,
         'found_reference_exact_remaining':12-len(missing['remaining']),
         'found_reference_exact_backgrounds':1544-len(missing['backgrounds']),
         'missing_reference_exact_remaining':missing['remaining'],
@@ -226,17 +235,26 @@ def discover(audit, overlay, archives, directories=()):
         'candidate_entries_hashed':inspected,
         'candidate_bytes_hashed':total_bytes,
         'independent_source_provenance_verified':False,
+        'publisher_original_gacha_art_authenticated':False,
         'gameplay_verified':False,
         'original_import_authorized':False,
-        'note':'A byte match alone does not prove independent historical origin or game compatibility. Never overwrite original contents.',
+        'note':('The 1544 background reference fingerprints belong to locally generated '
+                'offline fallback cards; matching them does not recover original publisher '
+                'art. The twelve original-content MD5 mismatches require independent source '
+                'evidence. Never overwrite original contents.'),
     }
     return groups,hits,result
 
 
-def stage_all(overlay, groups, hits, destination):
-    expected={**groups['bootstrap'],**groups['phase_manifests'],**groups['remaining'],**groups['backgrounds']}
-    if any(path not in hits or not hits[path] for path in {**groups['remaining'],**groups['backgrounds']}):
-        raise ValueError('not all 1556 missing references have exact candidate bytes')
+def stage_all(overlay, groups, hits, destination, *, include_backgrounds=True):
+    # A 52-file core overlay is explicitly PARTIAL; the optional 1,544
+    # reference banners are generated fallbacks, not authenticated original art.
+    extra={**groups['remaining']}
+    if include_backgrounds:
+        extra.update(groups['backgrounds'])
+    expected={**groups['bootstrap'],**groups['phase_manifests'],**extra}
+    if any(path not in hits or not hits[path] for path in extra):
+        raise ValueError('not all requested reference-exact sources are present')
     # Recheck after discovery: an altered 40-file ZIP must NEVER be copied
     # merely because its pathname was already verified once.
     verify_base40(overlay, groups)
@@ -261,7 +279,7 @@ def stage_all(overlay, groups, hits, destination):
                     raise ValueError('40-file source fingerprint changed during staging: '+name)
                 output=tmp/name; output.parent.mkdir(parents=True,exist_ok=True)
                 output.write_bytes(raw)
-        for name in {**groups['remaining'],**groups['backgrounds']}:
+        for name in extra:
             src,member=hits[name][0]
             if member is None:
                 raw=read_direct_candidate(Path(src),name)
@@ -282,10 +300,15 @@ def stage_all(overlay, groups, hits, destination):
             output.write_bytes(raw)
         (tmp/'RESTORE_STATUS.json').write_text(json.dumps({
             'verified_reference_exact_file_count':len(expected),
+            'overlay_scope':('BUNDLE_REFERENCE_1596_WITH_GENERATED_FALLBACKS'
+                             if include_backgrounds else 'CORE_52_ONLY'),
+            'publisher_original_gacha_art_authenticated':False,
             'original_import_authorized':False,
             'original_game_playable':False,
             'owner_archive_modified':False,
-            'warning':'Complete 1596-file overlay, not complete original 14GB archive; run separate source and native acceptance checks.'
+            'warning':('This is a partial core recovery, not the full original '
+                       '14GB archive or playable game. Generated banner fallback '
+                       'hashes do not authenticate publisher artwork.'),
         },indent=2)+'\n',encoding='utf-8')
         if destination.exists() or destination.is_symlink():
             raise ValueError('output appeared while staging')
@@ -304,6 +327,8 @@ def main():
                         help='already-extracted contents directory, exact reference paths only')
     parser.add_argument('--output-dir',type=Path)
     parser.add_argument('--apply',action='store_true')
+    parser.add_argument('--core-only',action='store_true',
+                        help='explicitly stage 40+12 exact core files only; not importable')
     args=parser.parse_args()
     if args.apply and not args.output_dir:
         parser.error('--apply requires --output-dir')
@@ -311,10 +336,16 @@ def main():
     groups,hits,report=discover(audit,args.verified40,
                                 args.candidate_zip,args.candidate_dir)
     if args.apply:
-        if report['status']!='REFERENCE_EXACT_SOURCE_READY_STAGING_ONLY':
-            raise ValueError('incomplete sources: refusing to write an invalid recovery overlay')
-        stage_all(args.verified40,groups,hits,args.output_dir)
+        if args.core_only:
+            if not report['reference_exact_core_52_ready']:
+                raise ValueError('all 12 exact original-content blockers must be recovered before core-only staging')
+        elif report['status']!='REFERENCE_EXACT_SOURCE_READY_STAGING_ONLY':
+            raise ValueError('incomplete bundled-reference sources: refusing full overlay')
+        stage_all(args.verified40,groups,hits,args.output_dir,
+                  include_backgrounds=not args.core_only)
         report['staged_overlay']=str(args.output_dir)
+        report['staged_scope']=('CORE_52_ONLY_NOT_IMPORTABLE' if args.core_only
+                                else 'BUNDLE_REFERENCE_1596_NOT_ORIGINAL_ART')
     print(json.dumps(report,ensure_ascii=False,indent=2))
 
 if __name__=='__main__':
