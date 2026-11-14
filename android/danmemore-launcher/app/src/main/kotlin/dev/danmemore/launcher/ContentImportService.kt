@@ -30,8 +30,11 @@ class ContentImportService : Service() {
         if (intent?.action != ACTION_IMPORT || !importing.compareAndSet(false, true)) return START_NOT_STICKY
         val uri = intent.data
         if (uri == null) {
+            // Do not strand this Service in the importing state after a
+            // malformed request; a later valid import must remain possible.
+            importing.set(false)
             publish("Content import failed: no ZIP was selected")
-            stopSelf()
+            stopSelf(startId)
             return START_NOT_STICKY
         }
         startForeground(NOTIFICATION_ID, notification("Preparing preserved assets"))
@@ -45,9 +48,11 @@ class ContentImportService : Service() {
             } catch (error: Throwable) {
                 publish("Content import failed: ${error.message ?: error.javaClass.simpleName}")
             } finally {
-                importing.set(false)
                 stopForeground(STOP_FOREGROUND_REMOVE)
-                stopSelf()
+                importing.set(false)
+                // An older import must not stop a newer start request that
+                // arrived just after the gate was released.
+                stopSelf(startId)
             }
         }
         return START_NOT_STICKY
