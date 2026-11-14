@@ -215,3 +215,23 @@ python3 tools/verify_remaining_legacy_candidates.py \\
 注意：**這一輪是 2/450 筆已實際取得並與參考 MD5 全同，不是 450/450 全通過。** 另外一個檔案已取得內容指紋，但其是否符合其他遊戲版本原版資產仍未知。雲端目錄中，450 筆有參考的檔案大小雖全相符，也不會因此提升到 MD5 驗證。雲端 MIME 分類還指出不少 `.png` 檔案實際為 WebP；**保留原始位元組及原始路徑，不要依副檔名批次轉檔或重壓縮**，避免讓原版參考 MD5 失效。
 
 進一步恢復仍優先處理 **6 個劇情命令、4 個 Master、2 個視覺資源**這 12 個 reference MD5 不符檔案。對另外 252 張未入 manifest 的原圖則單獨留存來源／觀察到的位元組指紋，絕不當成 1,544 張缺圖的「已修復」。使用者 14 GB 裝置備份沒有在此輪進行實體讀取，原版 import、AYN Thor、main 都沒有修改；PR 保持 Draft。
+
+
+## 2026-11-14｜已在隔離工作環境實際重建 40 個 reference-exact 資源（v2）
+
+不再只是短暫 CI 的 33 檔證據。此輪從[公開 EU 2023-12-22 原始 APK](https://drive.google.com/file/d/1KMT429Dr15OyKtWv16FumBY0CyXoi8de/view) 取得 **80,881,609 bytes** 的原始安裝包，**實際重新計算 SHA-256**，結果與獨立釘選值
+`36713f18a6e9fec3302384b8d67383b12761f782d73932cb62b31b230053c3b6` 完全相同。
+
+對照使用者 2026-11-10 的 `danmemore_legacy_audit 3(1).json`，以及已經存在於其 ChatGPT Library 的 `DanMemoRe_Resource_Recovery_Pack_v1.zip`（SHA-256
+`af8fd295752c57aff28d796e9b3ad719cb2d6766a99c2c7251e2775e1c3d8dfc`）：
+
+- **33/33 原始 Phase-1 啟動素材**：只從 SHA-pinned EU APK 中允許的 `assets/common/` / `assets/` 路徑提取，逐一比對 reference+historical MD5 及長度；不缺、不重複。合計 **3,323,167 bytes** 原版素材；
+- **7/7 修復後 phase.manifest**：從舊版 47 KB 驗證套件讀取，獨立比對 19 項異常稽核內相應的 reference+historical MD5 及長度；
+- 用**新名稱、非覆寫**方式實際寫入私有交付套件 `DanMemoRe_Original_40_ByteExact_Overlay_v2.zip`：**40 項 reference-exact 資源 + 2 份非遊戲位元組的說明／指紋檔**，ZIP 成品大小 **3,192,292 bytes**；
+- **整包 SHA-256：** `df39400c3f664546332cb77087373249399a675b878eb460715c8a0f62b40780`；
+- 封裝後重新開啟 ZIP，CRC、每項的實際資料、每項 MD5 與 40 項 SHA-256 指紋清單均通過；未將原始 APK 包入新 ZIP，且未將原版資產位元組提交 GitHub；
+- `RESTORE_STATUS.json` 標示 **`original_game_import_authorized=false`**、**`original_story_battle_gacha_verified=false`**、**`owner_ayn_thor_installed=false`**，並列出 12 個尚未解決的 reference MD5 不符檔案。
+
+**保存位置：** 生成套件已在**這次 ChatGPT 對話的隔離工作環境**建立並提供下載，不在 GitHub 程式庫，也**不表示使用者已下載、安裝或套用**。不用急著下載；未來若需重建，必須從 SHA-pinned 原始 APK + 使用者既有 reference-exact 7 Manifest 套件再逐項核驗，不能改從未驗證鏡像直接採用。
+
+**適用範圍限制：** 這份 ZIP 是**部分原版資料獨立 overlay**，不是完整遊戲。剩下 **12 個不符 MD5 的舊備份內容**與 **1,544 項 Phase-3 缺少實體參考原圖**尚未補齊，25 個觀察到的劇情 opcode 仍然 **0/25 原版 handler 已映射**。不得將此套件當作已通過 Legacy Import、劇情、戰鬥、抽卡或 AYN Thor 真機驗收；不得覆蓋歷史 RAR、原 APK、`contents`、已安裝 App 或 `main`，PR #1 保持 Draft。
