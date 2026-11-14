@@ -138,6 +138,26 @@ class ExactRestorationTests(unittest.TestCase):
             self.assertEqual((output/'3/files/lottery/background/171000001.png').read_bytes(),
                              missing['3/files/lottery/background/171000001.png'])
 
+    def test_directory_candidate_mutated_after_discovery_is_not_staged(self):
+        # Source may change between read-only candidate discovery and apply.
+        # Staging must re-read each file and reject inconsistent bytes.
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            audit,overlay,_,_,missing=fixture(root)
+            contents=root/'contents'
+            for name,raw in missing.items():
+                file=contents/name
+                file.parent.mkdir(parents=True,exist_ok=True)
+                file.write_bytes(raw)
+            groups,hits,report=recover.discover(audit,overlay,[],[contents])
+            self.assertEqual(report['status'],'REFERENCE_EXACT_SOURCE_READY_STAGING_ONLY')
+            corrupted=contents/'1/files/font/number.png'
+            corrupted.write_bytes(b'X' * len(missing['1/files/font/number.png']))
+            output=root/'must-not-be-staged'
+            with self.assertRaisesRegex(ValueError,'candidate changed since discovery'):
+                recover.stage_all(overlay,groups,hits,output)
+            self.assertFalse(output.exists())
+
     def test_directory_symlinks_are_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp)
