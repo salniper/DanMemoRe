@@ -6,6 +6,7 @@ from pathlib import Path
 import struct
 import tempfile
 import unittest
+import zipfile
 import zlib
 
 import verify_remaining_legacy_candidates as checker
@@ -142,6 +143,85 @@ class CandidateAuditTests(unittest.TestCase):
         target.write_bytes(self.original[name])
         checker.compare(self.audit, checker.directory_candidates(self.contents))
         self.assertEqual(target.read_bytes(), self.original[name])
+
+
+    def test_zip_candidates_root_and_contents_prefix(self):
+        archive = self.root / "snapshot.zip"
+        first = checker.STORIES[0]
+        second = checker.PNG
+        with zipfile.ZipFile(archive, "w") as out:
+            out.writestr(first, self.reference[first])
+            out.writestr("contents/" + second, self.original[second])
+            out.writestr("unrelated/huge-file", b"do-not-use")
+        original_sha = hashlib.sha256(archive.read_bytes()).hexdigest()
+        values = checker.zip_candidates(archive)
+        result = checker.compare(self.audit, values)
+        self.assertEqual(result["reference_exact_count"], 1)
+        self.assertEqual(result["categories"]["SAME_AS_UNVERIFIED_BACKUP"], 1)
+        self.assertEqual(result["categories"]["ABSENT"], 10)
+        self.assertEqual(result["verdict"], "NO_IMPORT_AUTHORIZATION")
+        self.assertEqual(hashlib.sha256(archive.read_bytes()).hexdigest(), original_sha)
+
+    def test_zip_rejects_duplicate_logical_path(self):
+        archive = self.root / "duplicate.zip"
+        name = checker.MASTERS[0]
+        with zipfile.ZipFile(archive, "w") as out:
+            out.writestr(name, self.reference[name])
+            out.writestr("contents/" + name, self.reference[name])
+        with self.assertRaisesRegex(ValueError, "duplicate target"):
+            checker.zip_candidates(archive)
+
+    def test_zip_rejects_symlink_target(self):
+        archive = self.root / "symlink.zip"
+        name = checker.STORIES[1]
+        entry = zipfile.ZipInfo(name)
+        entry.create_system = 3
+        entry.external_attr = (0o120777 << 16)
+        with zipfile.ZipFile(archive, "w") as out:
+            out.writestr(entry, b"../secret")
+        with self.assertRaisesRegex(ValueError, "unsafe ZIP member"):
+            checker.zip_candidates(archive)
+
+    def test_zip_ignores_basename_matches_elsewhere(self):
+        archive = self.root / "other.zip"
+        name = checker.STORIES[2]
+        with zipfile.ZipFile(archive, "w") as out:
+            out.writestr("random/" + name, self.reference[name])
+            out.writestr("../" + name, self.reference[name])
+        self.assertEqual(checker.zip_candidates(archive), {})
+
+    def test_zip_rejects_symlink_archive(self):
+        archive = self.root / "actual.zip"
+        with zipfile.ZipFile(archive, "w") as out:
+            out.writestr(checker.PNG, self.reference[checker.PNG])
+        alias = self.root / "alias.zip"
+        alias.symlink_to(archive)
+        with self.assertRaisesRegex(ValueError, "non-symlink"):
+            checker.zip_candidates(alias)
+
+    def test_zip_rejects_member_count_beyond_bound(self):
+        archive = self.root / "few.zip"
+        with zipfile.ZipFile(archive, "w") as out:
+            out.writestr(checker.PNG, self.reference[checker.PNG])
+        old = checker.MAX_ZIP_ENTRIES
+        try:
+            checker.MAX_ZIP_ENTRIES = 0
+            with self.assertRaisesRegex(ValueError, "too many entries"):
+                checker.zip_candidates(archive)
+        finally:
+            checker.MAX_ZIP_ENTRIES = old
+
+    def test_zip_rejects_total_uncompressed_budget(self):
+        archive = self.root / "budget.zip"
+        with zipfile.ZipFile(archive, "w") as out:
+            out.writestr(checker.MASTERS[0], b"12345678")
+        old = checker.MAX_SELECTED_ZIP_BYTES
+        try:
+            checker.MAX_SELECTED_ZIP_BYTES = 4
+            with self.assertRaisesRegex(ValueError, "total read bound"):
+                checker.zip_candidates(archive)
+        finally:
+            checker.MAX_SELECTED_ZIP_BYTES = old
 
 
 if __name__ == "__main__":
