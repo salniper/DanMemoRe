@@ -30,14 +30,17 @@ class ContentImportService : Service() {
         if (intent?.action != ACTION_IMPORT || !importing.compareAndSet(false, true)) return START_NOT_STICKY
         val uri = intent.data
         if (uri == null) {
+            // Do not strand this Service in the importing state after a
+            // malformed request; a later valid import must remain possible.
+            importing.set(false)
             publish("Content import failed: no ZIP was selected")
-            stopSelf()
+            stopSelf(startId)
             return START_NOT_STICKY
         }
         startForeground(NOTIFICATION_ID, notification("Preparing preserved assets"))
         thread(name = "danmemore-content-import", isDaemon = true) {
             try {
-                ContentImporter(this).importZip(uri) { status ->
+                ContentImporter(this).importZip(uri, intent?.getBooleanExtra(EXTRA_LEGACY_MODE, false) == true) { status ->
                     publish(status)
                     getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification(status))
                 }
@@ -45,9 +48,11 @@ class ContentImportService : Service() {
             } catch (error: Throwable) {
                 publish("Content import failed: ${error.message ?: error.javaClass.simpleName}")
             } finally {
-                importing.set(false)
                 stopForeground(STOP_FOREGROUND_REMOVE)
-                stopSelf()
+                importing.set(false)
+                // An older import must not stop a newer start request that
+                // arrived just after the gate was released.
+                stopSelf(startId)
             }
         }
         return START_NOT_STICKY
@@ -73,6 +78,7 @@ class ContentImportService : Service() {
 
     companion object {
         const val ACTION_IMPORT = "dev.danmemore.launcher.content.IMPORT"
+        const val EXTRA_LEGACY_MODE = "dev.danmemore.launcher.content.LEGACY_MODE"
         private const val CHANNEL_ID = "danmemore_content_import"
         private const val NOTIFICATION_ID = 6602
     }
@@ -81,14 +87,42 @@ class ContentImportService : Service() {
 internal object DanMemoContentCache {
     private const val MARKER = ".danmemore-content.json"
 
+    private fun validRoot(root: File): Boolean {
+        val marker = runCatching { JSONObject(File(root, MARKER).readText(Charsets.UTF_8)) }.getOrNull() ?: return false
+        if (marker.optInt("schemaVersion") != 1 || marker.optLong("archiveFiles") < 1L ||
+            marker.optLong("expandedBytes") < 1L || marker.optInt("verifiedAssets") < 1) return false
+        if (CONTENT_ROOTS.any { !File(root, it).isDirectory }) return false
+        if ((1..8).any { !File(root, "$it/project.manifest").isFile }) return false
+        return true
+    }
+
     fun activeRoot(context: Context): File? {
         val root = File(File(context.filesDir, "danmemore/content"), "active")
-        val marker = runCatching { JSONObject(File(root, MARKER).readText(Charsets.UTF_8)) }.getOrNull() ?: return null
-        if (marker.optInt("schemaVersion") != 1 || marker.optLong("archiveFiles") < 1L ||
-            marker.optLong("expandedBytes") < 1L || marker.optInt("verifiedAssets") < 1) return null
-        if (CONTENT_ROOTS.any { !File(root, it).isDirectory }) return null
-        if ((1..8).any { !File(root, "$it/project.manifest").isFile }) return null
-        return root
+        return root.takeIf(::validRoot)
+    }
+
+    internal fun isPreviousCacheValidForRecovery(context: Context): Boolean =
+        validRoot(File(File(context.filesDir, "danmemore/content"), ".previous"))
+
+    // Invoked ONLY from a worker thread when a launch finds no valid active
+    // cache. The same monitor guards import activation, so a launch cannot
+    // mistake the importer's intermediate rename state for a crashed import.
+    internal fun restorePreviousForLaunch(context: Context): Boolean = synchronized(this) {
+        val cacheRoot = File(context.filesDir, "danmemore/content")
+        val active = File(cacheRoot, "active")
+        if (validRoot(active)) return@synchronized true
+        val previous = File(cacheRoot, ".previous")
+        if (!validRoot(previous)) return@synchronized false
+        if (active.exists()) check(active.deleteRecursively()) {
+            "invalid active cache could not be removed; previous cache retained"
+        }
+        check(previous.renameTo(active)) {
+            "previous content cache could not be restored; it remains in .previous"
+        }
+        check(validRoot(active)) {
+            "restored content cache failed its normal marker/root validation"
+        }
+        true
     }
 
     internal val CONTENT_ROOTS = listOf("1", "2", "3", "4", "5", "6", "7", "8",
@@ -108,7 +142,7 @@ private class ContentImporter(private val context: Context) {
     private var lastProgress = 0L
     private lateinit var progress: (String) -> Unit
 
-    fun importZip(uri: Uri, progress: (String) -> Unit) {
+    fun importZip(uri: Uri, legacyMode: Boolean, progress: (String) -> Unit) {
         this.progress = progress
         loadExpectedAssets()
         val cacheRoot = File(context.filesDir, "danmemore/content")
@@ -118,6 +152,11 @@ private class ContentImporter(private val context: Context) {
         val sourceArchive = File(cacheRoot, ".selected.zip")
         cacheRoot.mkdirs()
         check(cacheRoot.isDirectory) { "could not create the private content cache" }
+
+        // Make an interrupted previous import recoverable BEFORE reading a
+        // possibly huge new ZIP. The launcher may otherwise have no active
+        // resources until another full archive import finishes.
+        synchronized(DanMemoContentCache) { recoverInterruptedActivation(active, previous) }
 
         val archiveBytes = context.contentResolver.openAssetFileDescriptor(uri, "r")?.use { it.length }.takeIf { it != null && it > 0L }
         if (archiveBytes != null) {
@@ -133,8 +172,9 @@ private class ContentImporter(private val context: Context) {
         sourceArchive.delete()
         check(staging.mkdirs()) { "could not create the content staging directory" }
         try {
-            copySelectedArchive(uri, sourceArchive)
+            copySelectedArchive(uri, sourceArchive, legacyMode)
             extractArchive(sourceArchive, staging)
+            if (legacyMode) verifyPinnedLegacyArchive(staging)
             val missingRoots = DanMemoContentCache.CONTENT_ROOTS.filterNot(roots::contains)
             check(missingRoots.isEmpty()) { "archive is missing ${missingRoots.joinToString()}" }
             check((1..8).all { File(staging, "$it/project.manifest").isFile }) {
@@ -150,21 +190,75 @@ private class ContentImporter(private val context: Context) {
                 Charsets.UTF_8,
             )
 
-            previous.deleteRecursively()
-            if (active.exists()) check(active.renameTo(previous)) { "could not preserve the active content cache" }
-            try {
-                check(staging.renameTo(active)) { "could not activate the verified content cache" }
-                check(DanMemoContentCache.activeRoot(context) != null) { "activated content failed its final validation" }
-                previous.deleteRecursively()
-            } catch (error: Throwable) {
-                if (!active.exists() && previous.exists()) previous.renameTo(active)
-                throw error
+            synchronized(DanMemoContentCache) {
+                val hadActive = active.exists()
+                if (hadActive) {
+                    check(active.renameTo(previous)) { "could not preserve the active content cache" }
+                }
+                var newCacheActivated = false
+                try {
+                    check(staging.renameTo(active)) { "could not activate the verified content cache" }
+                    newCacheActivated = true
+                    check(DanMemoContentCache.activeRoot(context) != null) {
+                        "activated content failed its final validation"
+                    }
+                } catch (error: Throwable) {
+                    // A successfully renamed, but invalid, active directory still
+                    // exists. Do not use existence as evidence of valid activation.
+                    // Preserve .previous if deleting the invalid new cache fails.
+                    if (newCacheActivated && active.exists() && !active.deleteRecursively()) {
+                        throw IllegalStateException(
+                            "invalid active cache could not be removed; previous cache retained", error
+                        )
+                    }
+                    if (hadActive && previous.exists() && !previous.renameTo(active)) {
+                        throw IllegalStateException(
+                            "previous content cache could not be restored; it remains in .previous", error
+                        )
+                    }
+                    throw error
+                }
+                // The new active cache has passed the final marker/root check.
+                // A cleanup failure is not a reason to undo a successful import.
+                if (hadActive && !previous.deleteRecursively()) {
+                    progress("Content import complete; previous cache retained for cleanup")
+                }
             }
         } catch (error: Throwable) {
             staging.deleteRecursively()
             throw error
         } finally {
             sourceArchive.delete()
+        }
+    }
+
+    private fun recoverInterruptedActivation(active: File, previous: File) {
+        if (!previous.exists()) return
+        // The preserved snapshot must independently pass launcher-root
+        // validation before any invalid active directory is removed.
+        if (DanMemoContentCache.activeRoot(context) == null &&
+            !DanMemoContentCache.isPreviousCacheValidForRecovery(context)) {
+            error("previous content cache is not verified; retaining both snapshots")
+        }
+        if (!active.exists()) {
+            check(previous.renameTo(active)) {
+                "could not restore the cache preserved by the interrupted import"
+            }
+        } else if (DanMemoContentCache.activeRoot(context) != null) {
+            // Only discard a leftover previous snapshot when the new cache
+            // already passes its normal active-root validation.
+            check(previous.deleteRecursively()) {
+                "could not remove a stale previous content cache"
+            }
+        } else {
+            // This may be the half-activated directory from a failed import.
+            // Never delete .previous first while the active root is invalid.
+            check(active.deleteRecursively()) {
+                "invalid active cache could not be removed; previous cache retained"
+            }
+            check(previous.renameTo(active)) {
+                "could not restore previous content cache after interrupted import"
+            }
         }
     }
 
@@ -189,7 +283,98 @@ private class ContentImporter(private val context: Context) {
         check(expected.isNotEmpty()) { "bundled content manifests are empty" }
     }
 
-    private fun copySelectedArchive(uri: Uri, destination: File) {
+
+    // Legacy mode is opt-in. This check runs before writePatches(), marker creation,
+    // and atomic activation. Fail closed on any byte that is not pinned to an
+    // original manifest; never rewrite an unverified source file as trusted.
+    private fun verifyPinnedLegacyArchive(staging: File) {
+        val pins = listOf(
+            "0052a4af6f0a8ebb128ff63585cfa1fa342a3c3e5e0104993d74e9b7f44dba35",
+            "6cc7d25c64c8c3d31325ccb79e7f21f497052d667392e10e22d097ebdc16b76c",
+            "6521b16593f16e42b05d0ae13ef13b6d12b16630695e727283da7d747fcc9564",
+            "f47699300251605755286c8b0463343f30df6d4ca2c1f9b58c0da16d323416a9",
+            "a938726af80060530ba5db2f8f1ab5172b2164a23d5390e1f8e2ca9db17d1e45",
+            "1a2224ef66984ae4600646f17b6aa3b8792c949ff7d8397dcd492ae2513e816e",
+            "80cc47827e364286e09896d66be3c9a6e9a5fc9f49bf4f6d7ef524c57aba0c47",
+            "b93ef86c93da1620f54df98167b7bff458d9b9e384a5e80694c6d018ba8f6414"
+        )
+        val versions = listOf(
+            "4ab12a6c3f219553661ff647ae79e322",
+            "4ab12a6c3f219553661ff647ae79e322",
+            "4ab12a6c3f219553661ff647ae79e322",
+            "4ab12a6c3f219553661ff647ae79e322",
+            "4ab12a6c3f219553661ff647ae79e322",
+            "582a6b5539f7766be40c5d2e36aca01b",
+            "582a6b5539f7766be40c5d2e36aca01b",
+            "4ab12a6c3f219553661ff647ae79e322",
+        )
+        val backgroundFolder = "runtime/manifests/resources/gacha/background"
+        val availableBackgrounds = context.assets.list(backgroundFolder).orEmpty().toSet()
+        check(availableBackgrounds.size == 1544) {
+            "legacy import: expected exactly 1544 bundled fallback gacha backgrounds"
+        }
+
+        var verifiedSource = 0
+        var historicalAlternates = 0
+        var absentSource = 0
+        for (phase in 1..8) {
+            val manifestFile = safeFile(staging, "$phase/project.manifest")
+            check(manifestFile.isFile) { "legacy import: missing phase $phase project.manifest" }
+            val sha256 = MessageDigest.getInstance("SHA-256")
+            manifestFile.inputStream().buffered(COPY_BUFFER_BYTES).use { input ->
+                val buffer = ByteArray(COPY_BUFFER_BYTES)
+                while (true) {
+                    val count = input.read(buffer)
+                    if (count < 0) break
+                    sha256.update(buffer, 0, count)
+                }
+            }
+            check(sha256.digest().toHex() == pins[phase - 1]) {
+                "legacy import: phase $phase project.manifest differs from approved 2024 snapshot"
+            }
+            val historical = JSONObject(manifestFile.readText(Charsets.UTF_8))
+            check(historical.getString("version") == versions[phase - 1]) {
+                "legacy import: unsupported version in phase $phase"
+            }
+            val previousAssets = historical.getJSONObject("assets")
+            val missing = ArrayList<String>()
+            for ((path, reference) in expected) {
+                if (!path.startsWith("$phase/") || path in PATCHED_PATHS) continue
+                val relative = path.removePrefix("$phase/")
+                val actual = resolved[path]
+                if (actual == null) {
+                    missing += relative
+                    continue
+                }
+                val old = previousAssets.optJSONObject(relative)
+                when (LegacyImportPolicy.classify(
+                    actual.size, actual.md5,
+                    reference.size, reference.md5,
+                    old?.getLong("size"), old?.getString("md5")?.lowercase(Locale.US),
+                )) {
+                    LegacyImportPolicy.Match.REFERENCE -> verifiedSource++
+                    LegacyImportPolicy.Match.HISTORICAL -> historicalAlternates++
+                    LegacyImportPolicy.Match.UNKNOWN ->
+                        error("legacy import: MD5/size mismatch for $path (neither current nor pinned historical)")
+                }
+            }
+            check(missing.all {
+                LegacyImportPolicy.permitsMissing(
+                    phase, it, previousAssets.has(it), availableBackgrounds
+                )
+            }) {
+                "legacy import: phase $phase has unexpected missing content: " + missing.joinToString()
+            }
+            absentSource += missing.size
+        }
+        check(verifiedSource > 80_000 && historicalAlternates <= 64 && absentSource <= 1_577) {
+            "legacy import: source coverage is outside the reviewed preservation snapshot"
+        }
+        progress("Legacy snapshot verified: $verifiedSource current, " +
+            "$historicalAlternates historical alternatives, $absentSource reviewed missing files")
+    }
+
+    private fun copySelectedArchive(uri: Uri, destination: File, legacyMode: Boolean) {
         progress("Content import: copying the selected ZIP into private storage")
         var copied = 0L
         var lastCopyProgress = 0L
@@ -213,7 +398,7 @@ private class ContentImporter(private val context: Context) {
             }
         } ?: error("Android could not open the selected ZIP")
         check(copied > 0L && destination.length() == copied) { "selected ZIP could not be staged completely" }
-        if (BuildConfig.STRICT_CONTENT_MANIFEST) {
+        if (BuildConfig.STRICT_CONTENT_MANIFEST && !legacyMode) {
             check(copied == EXPECTED_ARCHIVE_BYTES) { "selected ZIP has the wrong size for the 15.1.0 payload" }
             check(sha256.digest().toHex() == EXPECTED_ARCHIVE_SHA256) {
                 "selected ZIP failed the 15.1.0 payload checksum"

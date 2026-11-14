@@ -1,0 +1,223 @@
+name: Legacy Import policy
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/legacy-import-policy.yml"
+      - "tools/legacy-policy-ci/**"
+      - "tools/test_legacy_import_policy.kt"
+      - "tools/recover_legacy_apk_assets.py"
+      - "tools/test_recover_legacy_apk_assets.py"
+      - "tools/inspect_legacy_mismatches.py"
+      - "tools/test_inspect_legacy_mismatches.py"
+      - "tools/repair_verified_phase_manifests.py"
+      - "tools/test_repair_verified_phase_manifests.py"
+      - "tools/prepare_legacy_recovery_overlay.py"
+      - "tools/test_prepare_legacy_recovery_overlay.py"
+      - "tools/inspect_master_source_provenance.py"
+      - "tools/inspect_story_command_compat.cjs"
+      - "tools/inspect_story_flatbuffer_shape.cjs"
+      - "tools/test_inspect_story_flatbuffer_shape.cjs"
+      - "tools/inspect_story_field_profile.cjs"
+      - "tools/test_inspect_story_field_profile.cjs"
+      - "tools/inspect_story_command_sequence.cjs"
+      - "tools/test_inspect_story_command_sequence.cjs"
+      - "tools/verify_novel_opcode_evidence.cjs"
+      - "tools/test_verify_novel_opcode_evidence.cjs"
+      - "data/danmemore-novel-opcode-evidence.json"
+      - "tools/test_inspect_story_command_compat.cjs"
+      - "tools/inspect_native_novel_loader_markers.py"
+      - "tools/test_inspect_native_novel_loader_markers.py"
+      - "tools/inspect_elf_novel_xrefs.py"
+      - "tools/test_inspect_elf_novel_xrefs.py"
+      - "tools/inspect_native_novel_dispatch_seeds.py"
+      - "tools/test_inspect_native_novel_dispatch_seeds.py"
+      - "tools/inspect_native_novel_executor_flow.py"
+      - "tools/test_inspect_native_novel_executor_flow.py"
+      - "tools/inspect_native_novel_unwind.py"
+      - "tools/test_inspect_native_novel_unwind.py"
+      - "tools/inspect_native_novel_direct_callees.py"
+      - "tools/test_inspect_native_novel_direct_callees.py"
+      - "tools/inspect_native_novel_indirect_calls.py"
+      - "tools/test_inspect_native_novel_indirect_calls.py"
+      - "tools/inspect_native_novel_object_registers.py"
+      - "tools/test_inspect_native_novel_object_registers.py"
+      - "tools/inspect_native_novel_cfg_paths.py"
+      - "tools/test_inspect_native_novel_cfg_paths.py"
+      - "tools/inspect_native_novel_stack_slots.py"
+      - "tools/test_inspect_native_novel_stack_slots.py"
+      - "tools/inspect_native_novel_stack_store_paths.py"
+      - "tools/test_inspect_native_novel_stack_store_paths.py"
+      - "tools/inspect_native_novel_store_branch_selectors.py"
+      - "tools/test_inspect_native_novel_store_branch_selectors.py"
+      - "tools/inspect_native_novel_executor_callers.py"
+      - "tools/test_inspect_native_novel_executor_callers.py"
+      - "tools/probe_pristine_novel_dispatch.py"
+      - "tools/verify_pristine_arm64_xapk.py"
+      - "tools/test_verify_pristine_arm64_xapk.py"
+      - "tools/audit_original_xapk_asset_candidates.py"
+      - "tools/test_audit_original_xapk_asset_candidates.py"
+      - "tools/audit_original_xapk_bootstrap33.py"
+      - "tools/test_audit_original_xapk_bootstrap33.py"
+      - "tools/stage_original_xapk_bootstrap33.py"
+      - "tools/test_stage_original_xapk_bootstrap33.py"
+      - "tools/restore_bootstrap33_pinned_local.py"
+      - "tools/test_restore_bootstrap33_pinned_local.py"
+      - "tools/audit_phase3_lottery_background_files.py"
+      - "tools/test_audit_phase3_lottery_background_files.py"
+      - "data/legacy-bootstrap-reference-33.json"
+      - "tools/verify_story_payload_with_xapk.py"
+      - "tools/test_verify_story_payload_with_xapk.py"
+      - "tools/inspect_native_novel_xref_context.py"
+      - "tools/test_inspect_native_novel_xref_context.py"
+      - "tools/inspect_native_novel_elf_sections.py"
+      - "tools/test_inspect_native_novel_elf_sections.py"
+      - "tools/verify_remaining_legacy_candidates.py"
+      - "tools/test_verify_remaining_legacy_candidates.py"
+      - "tools/test_inspect_master_source_provenance.py"
+      - "android/danmemore-launcher/app/src/main/kotlin/dev/danmemore/launcher/LegacyImportPolicy.kt"
+
+permissions:
+  contents: read
+
+jobs:
+  jvm-policy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Set up isolated Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.14.3"
+      - name: Compile and run pure Kotlin policy checks
+        run: gradle -p tools/legacy-policy-ci run --no-daemon --stacktrace
+
+  apk-recovery-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test safe offline APK recovery and mismatch inspection
+        run: |
+          python3 -m unittest discover -s tools -p 'test_recover_legacy_apk_assets.py' -v
+          python3 -m unittest discover -s tools -p 'test_inspect_legacy_mismatches.py' -v
+          python3 -m unittest discover -s tools -p 'test_repair_verified_phase_manifests.py' -v
+          python3 -m unittest discover -s tools -p 'test_prepare_legacy_recovery_overlay.py' -v
+
+  story-command-diagnostic-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Run synthetic fail-closed story command checks
+        run: |
+          node tools/test_inspect_story_command_compat.cjs
+          node tools/test_inspect_story_flatbuffer_shape.cjs
+          node tools/test_inspect_story_field_profile.cjs
+          node tools/test_inspect_story_command_sequence.cjs
+          node tools/verify_novel_opcode_evidence.cjs
+          node tools/test_verify_novel_opcode_evidence.cjs
+
+  native-novel-marker-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run synthetic native marker scanner tests
+        run: python3 -m unittest discover -s tools -p 'test_inspect_native_novel_loader_markers.py' -v
+
+  native-novel-elf-xref-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify synthetic ELF segment and AArch64 references
+        run: |
+          python3 -m unittest discover -s tools -p 'test_inspect_elf_novel_xrefs.py' -v
+          python3 -m unittest discover -s tools -p 'test_inspect_native_novel_dispatch_seeds.py' -v
+          python3 -m unittest discover -s tools -p 'test_inspect_native_novel_executor_flow.py' -v
+          python3 -m unittest discover -s tools -p 'test_inspect_native_novel_unwind.py' -v
+          python3 -m unittest discover -s tools -p 'test_inspect_native_novel_direct_callees.py' -v
+          python3 -m unittest discover -s tools -p 'test_inspect_native_novel_indirect_calls.py' -v
+          python3 -m unittest discover -s tools -p 'test_inspect_native_novel_object_registers.py' -v
+          python3 -m unittest discover -s tools -p 'test_inspect_native_novel_cfg_paths.py' -v
+          python3 -m unittest discover -s tools -p 'test_inspect_native_novel_stack_slots.py' -v
+          python3 -m unittest discover -s tools -p 'test_inspect_native_novel_stack_store_paths.py' -v
+          python3 -m unittest discover -s tools -p 'test_inspect_native_novel_store_branch_selectors.py' -v
+          python3 -m unittest discover -s tools -p 'test_inspect_native_novel_executor_callers.py' -v
+
+  pristine-arm64-source-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify original XAPK ARM64 fingerprint source gate
+        run: python3 -m unittest discover -s tools -p 'test_verify_pristine_arm64_xapk.py' -v
+
+  native-novel-context-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate bounded native code neighborhoods
+        run: python3 -m unittest discover -s tools -p 'test_inspect_native_novel_xref_context.py' -v
+
+  native-novel-elf-symbol-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate section and symbol provenance classifications
+        run: python3 -m unittest discover -s tools -p 'test_inspect_native_novel_elf_sections.py' -v
+
+  six-owner-story-crypto-probe-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test private and fail-closed six-story staging without original bytes
+        run: python3 -m unittest discover -s tools -p 'test_verify_story_payload_with_xapk.py' -v
+
+  original-xapk-candidate-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate original XAPK exact asset metadata comparisons
+        run: |
+          python3 -m unittest discover -s tools -p 'test_audit_original_xapk_asset_candidates.py' -v
+          python3 -m unittest discover -s tools -p 'test_audit_original_xapk_bootstrap33.py' -v
+          python3 -m unittest discover -s tools -p 'test_stage_original_xapk_bootstrap33.py' -v
+          python3 -m unittest discover -s tools -p 'test_restore_bootstrap33_pinned_local.py' -v
+          python3 -m unittest discover -s tools -p 'test_audit_phase3_lottery_background_files.py' -v
+
+  residual-candidate-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify candidate audit fail-closed controls
+        run: python3 -m unittest discover -s tools -p 'test_verify_remaining_legacy_candidates.py' -v
+
+  master-provenance:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify source metadata parser with synthetic fixtures
+        run: python3 -m unittest discover -s tools -p 'test_inspect_master_source_provenance.py' -v
+      - name: Compare recorded EU master source fingerprints
+        run: |
+          python3 tools/inspect_master_source_provenance.py \
+            --master data/danmemore-master.json \
+            --require-source-sha lotteryWeightGroup=0217c8b751ec3baa5a33089a8db1c5b6123bd9301962fa806f450f14d88cbd2a \
+            --require-source-sha subscription=45e0a9c947fe45e8b9b4122e0e5f88d46cc5ef58e44e559d8fc082870d64e1fb

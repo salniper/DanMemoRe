@@ -1,0 +1,468 @@
+name: One-shot pristine EU ARM64 provenance probe
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/legacy-arm64-provenance-probe.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  original-client-source-probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch candidate once, verify two fingerprints, scan ELF literals
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          umask 077
+          local_dir="$(mktemp -d)"
+          trap 'rm -rf "$local_dir"' EXIT
+          candidate="$local_dir/pristine-original-arm64.xapk"
+
+          # Third-party source, unauthenticated until BOTH the published archive
+          # SHA-1 and independently pinned pristine ELF SHA-256 pass. The binary
+          # never leaves this job, is not uploaded and is never executed.
+          if ! curl -fLsS --retry 1 --retry-delay 2 --connect-timeout 15 \
+               --max-time 120 --max-filesize 268435456 \
+               --proto '=https' --tlsv1.2 \
+               -o "$candidate" \
+               'https://d.apkpure.net/b/XAPK/com.eu.danmemo?nc=&sv=19&versionCode=170316722'; then
+            echo "SOURCE_UNAVAILABLE: original ARM64 archive could not be fetched." | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          if ! python3 tools/verify_pristine_arm64_xapk.py \
+               --xapk "$candidate" --scan --context --sections > "$local_dir/report.json"; then
+            echo "CANDIDATE_REJECTED: pinned original archive/native hashes or structure did not validate." | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          # Source content search is read-only. Every candidate must match
+          # the reference asset MD5 AND size; names alone prove nothing.
+          python3 tools/audit_original_xapk_asset_candidates.py \
+            --xapk "$candidate" > "$local_dir/asset_candidates.json"
+
+          python3 - "$local_dir/asset_candidates.json" <<'PY'
+          import json, sys, os
+          with open(sys.argv[1], encoding="utf-8") as source:
+              audit = json.load(source)
+          print("original_xapk_nested_apks=" + str(audit["nested_apk_count"]))
+          print("reference_exact_asset_targets_in_original_xapk=" +
+                str(audit["reference_exact_target_count"]))
+          print("reference_exact_asset_targets_any_member_name=" +
+                str(audit["reference_exact_target_count_any_name"]))
+          print("size_filtered_members_hashed=" +
+                str(audit["size_filtered_zip_entries_hashed"]))
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
+              summary.write("Exact legacy asset candidates in authenticated original EU XAPK: " +
+                            str(audit["reference_exact_target_count"]) + " / 12.\n")
+          for path, record in audit["targets"].items():
+              if record["reference_exact_any_name_occurrences"]:
+                  print("reference_exact_any_member_name=" + json.dumps({
+                      "path": path,
+                      "count": record["reference_exact_any_name_occurrences"],
+                      "locations": record["reference_exact_any_name_locations"],
+                  }, sort_keys=True))
+              if record["basename_occurrences"]:
+                  print("original_xapk_asset_candidate=" + json.dumps({
+                      "path": path,
+                      "basename_occurrences": record["basename_occurrences"],
+                      "wrong_size_occurrences": record["wrong_size_occurrences"],
+                      "same_size_nonmatching_occurrences":
+                          record["same_size_nonmatching_occurrences"],
+                      "reference_exact_occurrences":
+                          record["reference_exact_occurrences"],
+                      "reference_exact_locations": record["reference_exact_locations"],
+                  }, sort_keys=True))
+          PY
+
+          # Attempt to locate exact missing Phase-1 bootstrap files
+          # in the *same* SHA-pinned original XAPK. Do not upload resource bytes.
+          python3 tools/audit_original_xapk_bootstrap33.py \
+            --xapk "$candidate" \
+            --index data/legacy-bootstrap-reference-33.json \
+            > "$local_dir/bootstrap33.json"
+
+          python3 - "$local_dir/bootstrap33.json" <<'PY'
+          import json, sys, os
+          with open(sys.argv[1],encoding="utf-8") as source:
+              audit=json.load(source)
+          print("original_xapk_bootstrap33_nested_apks="+str(audit["nested_apks_scanned"]))
+          print("original_xapk_bootstrap33_exact_expected_path="+
+                str(audit["expected_path_exact_count"]))
+          print("original_xapk_bootstrap33_exact_alternate_path="+
+                str(audit["alternate_path_exact_count"]))
+          print("original_xapk_bootstrap33_any_exact_md5="+
+                str(audit["any_md5_exact_count"]))
+          with open(os.environ["GITHUB_STEP_SUMMARY"],"a",encoding="utf-8") as summary:
+              summary.write(
+                  "Phase-1 missing bootstrap resources with original "
+                  "XAPK ZIP-member exact MD5+size: "+str(audit["any_md5_exact_count"]) +
+                  " / 33 (correct location: "+str(audit["expected_path_exact_count"])+").\n")
+          for path,row in audit["targets"].items():
+              if row["same_basename_entries"]:
+                  print("original_xapk_bootstrap33_candidate="+json.dumps({
+                      "path":path,
+                      "same_basename_entries":row["same_basename_entries"],
+                      "wrong_size_entries":row["wrong_size_entries"],
+                      "same_size_wrong_md5_entries":row["same_size_wrong_md5_entries"],
+                      "exact_expected_locations":row["exact_md5_at_expected_apk_path"],
+                      "exact_alternate_locations":row["exact_md5_at_alternate_apk_path"],
+                  },sort_keys=True))
+          PY
+
+          # Restore each original Phase-1 asset into an EPHEMERAL private
+          # directory and independently recheck it on disk. Never upload
+          # proprietary original-resource bytes as Actions artifacts.
+          python3 tools/stage_original_xapk_bootstrap33.py \
+            --xapk "$candidate" \
+            --index data/legacy-bootstrap-reference-33.json \
+            --output "$local_dir/verified-bootstrap33" \
+            --apply > "$local_dir/bootstrap33_stage.json"
+
+          python3 - "$local_dir/bootstrap33_stage.json" <<'PY'
+          import json, os, sys
+          with open(sys.argv[1],encoding="utf-8") as file:
+              r=json.load(file)
+          if (r["status"]!="PARTIAL_ORIGINAL_BOOTSTRAP33_RESTORED_NOT_IMPORTABLE"
+                  or r["restored_resource_files"]!=33
+                  or r["original_archive_import_authorized"] is not False):
+              raise SystemExit("FAIL_CLOSED: original bootstrap 33 staging mismatch")
+          print("original_bootstrap33_ephemeral_files_recovered="+
+                str(r["restored_resource_files"]))
+          print("original_bootstrap33_ephemeral_total_bytes="+
+                str(r["total_resource_bytes"]))
+          print("original_bootstrap33_archive_import_allowed=False")
+          with open(os.environ["GITHUB_STEP_SUMMARY"],"a",encoding="utf-8") as summary:
+              summary.write("Original bootstrap staging: **33/33 exact "
+                            "reference assets written and verified in "
+                            "ephemeral runner only**; resource bytes "
+                            "not published, archived or installed.\\n")
+          PY
+
+          # Independently SHA-pin the source, then search only ELF .text
+          # for references to the *start* of original novel source-path labels.
+          # Report function/class metadata and instruction offsets only.
+          python3 tools/probe_pristine_novel_dispatch.py \
+            --xapk "$candidate" > "$local_dir/novel_dispatch_seeds.json"
+
+          python3 - "$local_dir/novel_dispatch_seeds.json" <<'PY'
+          import json, sys, os
+          with open(sys.argv[1], encoding="utf-8") as source:
+              report = json.load(source)
+          print("novel_metadata_labels=" + str(report["original_source_labels_checked"]))
+          print("novel_metadata_executable_ref_targets=" +
+                str(report["code_referenced_original_labels"]))
+          print("novel_metadata_executable_ref_sites=" +
+                str(report["code_site_candidates"]))
+          print("native_dispatch_opcode_mappings_verified=" +
+                str(report["numeric_opcode_to_handler_mappings_verified"]))
+          print("original_unwind_sections=" +
+                json.dumps(report["original_unwind_section_evidence"],sort_keys=True))
+          executor=report["original_executor_neighborhoods"]
+          print("native_createNovel_source_anchored_sites=" +
+                str(executor["executor_site_count"]))
+          print("native_createNovel_dispatch_mapping_proven=" +
+                str(executor["native_opcode_handler_mapping_count"]))
+          unwind = report["original_executor_unwind_frames"]
+          print("original_unwind_fde_index_entries=" + str(unwind["fde_index_entries"]))
+          print("original_executor_unwind_covered_anchors=" +
+                str(unwind["exact_fde_coverage_count"]))
+          callers=report["original_executor_direct_callers"]
+          print("original_executor_external_direct_sites="+
+                str(callers["direct_external_call_or_tail_jump_sites"]))
+          print("original_executor_external_BL_sites="+
+                str(callers["direct_bl_sites"]))
+          print("original_executor_external_tail_B_sites="+
+                str(callers["tail_b_candidate_sites"]))
+          print("original_executor_incoming_X1_object_proven="+
+                str(callers["original_X1_runtime_object_verified"]))
+          for site in callers["candidate_callers"][:24]:
+              print("original_executor_incoming_X1_caller="+json.dumps({
+                  "call_va":site["site_va"],"call_kind":site["kind"],
+                  "caller_status":site["caller_elf_unwind_status"],
+                  "caller_fde_start_va":site["caller_fde_start_va"],
+                  "recognized_X1_writers":site["recognized_X1_writer_candidates"],
+                  "copied_X1_source_traces":site.get("copied_X1_source_register_traces",[]),
+                  "original_X20_object_identity_verified":False,
+                  "path_without_X1_writer":site.get("entry_path_without_recognized_X1_writer"),
+                  "runtime_X1_value_proven":False
+              },sort_keys=True))
+          selector=report["original_executor_stack_store_branch_selectors"]
+          print("original_stack_selector_alternative_queries="+
+                str(selector["alternative_store_queries"]))
+          print("original_stack_selector_modeled_splits="+
+                str(selector["queries_with_modeled_selector"]))
+          print("original_stack_selector_proven_opcode_handlers="+
+                str(selector["numeric_opcode_handler_pairs_verified"]))
+          for q in selector["queries"]:
+              print("original_stack_selector_branch_evidence="+json.dumps({
+                  "call_va":q["call_va"],
+                  "load_va":q["source_load_va"],
+                  "store_vas":q["store_vas"],
+                  "status":q["status"],
+                  "selector_branch_candidates":q["selector_branch_candidates"],
+                  "physical_store_value_verified":False
+              },sort_keys=True))
+          store_paths=report["original_executor_stack_store_paths"]
+          print("original_novel_stack_path_queries="+str(store_paths["query_count"]))
+          print("original_novel_stack_path_unclobbered_candidates="+
+                str(store_paths["stores_with_modeled_unclobbered_suffix"]))
+          print("original_novel_stack_path_verified_vtables="+
+                str(store_paths["confirmed_vtable_targets"]))
+          for item in store_paths["source_paths"]:
+              if item["stores"]:
+                  print("original_novel_stack_store_path_sources="+json.dumps({
+                      "call_va":item["call_va"],
+                      "load_va":item["source_load_va"],
+                      "normalized_slot":item["normalized_sp_offset"],
+                      "stores":item["stores"],
+                      "runtime_values_proven":False,
+                  },sort_keys=True))
+          stack=report["original_executor_stack_store_sources"]
+          print("original_executor_stack_queries="+str(stack["stack_slot_queries"]))
+          print("original_executor_stack_queries_with_stores="+
+                str(stack["queries_with_recognized_store_candidates"]))
+          print("original_executor_stack_confirmed_vtables="+
+                str(stack["original_vtable_addresses_proven"]))
+          for q in stack["queried_sources"]:
+              print("original_executor_cfg_stack_store_candidate="+json.dumps({
+                  "call_va":q["call_va"],
+                  "source_writer_va":q["source_writer_va"],
+                  "mode":q["kind"],
+                  "slot_relative_to_SP":q["sp_relative_byte_offset_at_use"],
+                  "entry_SP_normalized_offset":q.get("entry_sp_normalized_byte_offset"),
+                  "status":q["status"],
+                  "stores":q["known_store_candidates"],
+                  "entry_without_known_store":q.get("entry_path_without_known_store"),
+                  "unknown_SP_write_count":q.get("unresolved_sp_offset_writes"),
+                  "value_proven":False,
+              },sort_keys=True))
+          cfg=report["original_executor_cfg_object_paths"]
+          print("original_executor_cfg_call_sites="+str(cfg["call_sites_checked"]))
+          print("original_executor_cfg_linear_candidates_refuted="+
+                str(cfg["linear_nearest_writers_refuted_by_cfg"]))
+          print("original_executor_cfg_entry_reachable_words="+
+                json.dumps(cfg["cfg_entry_reachable_words"],sort_keys=True))
+          print("original_executor_cfg_vtable_values_verified="+
+                str(cfg["original_vtable_pointer_values_verified"]))
+          for row in cfg["source_register_paths"]:
+              print("original_executor_cfg_reaching_writer="+json.dumps({
+                  "call_va":row["call_va"],"source_register":row.get("source_object_register"),
+                  "status":row["status"],
+                  "cfg_entry_reaches_call":row.get("cfg_entry_reaches_call"),
+                  "linear_nearest_writer_va":row.get("linear_nearest_writer_va"),
+                  "linear_writer_reachable":row.get("linear_nearest_writer_is_cfg_first_reaching_candidate"),
+                  "cfg_reaching_writer_count":row["cfg_reaching_writer_count"],
+                  "cfg_entry_without_writer":row.get("cfg_entry_path_without_recognized_writer"),
+                  "recognized_writer_candidates":row["reaching_writer_samples"],
+                  "object_type_proven":False,
+              },sort_keys=True))
+          objects=report["original_executor_object_register_origins"]
+          print("original_executor_object_origin_sites="+
+                str(objects["indirect_call_count"]))
+          print("original_executor_recognized_object_writers="+
+                str(objects["recognized_origin_writer_count"]))
+          print("original_executor_verified_object_pointers="+
+                str(objects["verified_object_pointer_count"]))
+          for item in objects["object_register_sources"]:
+              print("original_executor_object_register_origin="+json.dumps({
+                  "call_va":item["call_instruction_va"],
+                  "source_register":item["object_source_register"],
+                  "origin_status":item["origin_status"],
+                  "origin_writer":item["origin_writer"],
+                  "register_flow_proven":item["register_flow_proven"],
+              },sort_keys=True))
+          indirect=report["original_executor_indirect_calls"]
+          print("original_executor_indirect_BLR_sites="+
+                str(indirect["original_blr_call_sites"]))
+          print("original_executor_indirect_BLR_writer_kinds="+
+                json.dumps(indirect["call_target_nearest_writer_kinds"],sort_keys=True))
+          print("original_executor_proven_vtable_targets="+
+                str(indirect["verified_vtable_targets"]))
+          print("original_executor_syntactic_two_pointer_load_chains="+
+                str(indirect["two_load_virtual_call_shaped_sites"]))
+          print("original_executor_indirect_opcode_handler_links="+
+                str(indirect["verified_numeric_opcode_handler_mappings"]))
+          for item in indirect["sites"]:
+              print("original_executor_BLR_target_provenance="+json.dumps({
+                  "call_va":item["call_instruction_va"],
+                  "target_register":item["call_target_register"],
+                  "writer_kind":item["nearest_writer_kind"],
+                  "writer_at":item.get("nearest_writer_file_offset"),
+                  "writer_source_register":item.get("nearest_writer_source_register"),
+                  "writer_byte_offset":item.get("nearest_writer_byte_offset"),
+                  "control_barriers":item["preceding_control_transfers_since_writer"],
+                  "earlier_writer_kind":item["earlier_register_writer_kind"],
+                  "earlier_writer_source":item["earlier_register_writer_source"],
+                  "earlier_writer_byte_offset":item["earlier_register_writer_byte_offset"],
+                  "two_load_syntactic_shape":item["two_pointer_loads_syntactically_adjacent_in_register"],
+                  "reaching_definition_validated":False,
+              },sort_keys=True))
+          exact_region=report["original_executor_cfi_region_code"]
+          print("original_executor_unique_fde_regions=" +
+                str(exact_region["distinct_verified_unwind_regions"]))
+          print("original_executor_cfi_opcode_handler_pairs=" +
+                str(exact_region["verified_numeric_opcode_handler_pairs"]))
+          callees=report["original_executor_direct_callees"]
+          print("novel_executor_original_BL_sites="+str(callees["original_caller_direct_bl_sites"]))
+          print("novel_executor_unique_BL_targets="+str(callees["unique_direct_bl_targets"]))
+          print("novel_executor_BL_target_fde_statuses="+
+                json.dumps(callees["callee_fde_status_totals"],sort_keys=True))
+          print("novel_executor_verified_opcode_handler_links="+
+                str(callees["numeric_opcode_to_native_handler_proven"]))
+          two_hop=report["original_executor_two_hop_novel_cpp_candidates"]
+          print("original_novel_second_hop_BL_sites="+
+                str(two_hop["total_second_hop_bl_sites"]))
+          print("original_novel_second_hop_unique_targets="+
+                str(two_hop["distinct_second_hop_targets"]))
+          print("original_novel_second_hop_fde_statuses="+
+                json.dumps(two_hop["second_hop_target_fde_status_counts"],sort_keys=True))
+          print("original_novel_second_hop_native_cpp_matches="+
+                str(two_hop["candidate_callees_with_handler_source_cpp"]))
+          print("original_novel_second_hop_verified_opcode_mappings="+
+                str(two_hop["numeric_opcode_to_native_handler_mappings_verified"]))
+          for region in two_hop["firsthop_regions"]:
+              print("original_novel_second_hop_region="+json.dumps({
+                  "firsthop_start":region["firsthop_fde_start_va"],
+                  "second_hop_bl_sites":region["second_hop_bl_sites"],
+                  "second_hop_distinct_targets":region["second_hop_distinct_targets"],
+                  "handler_cpp_candidate_callee_count":
+                    region["target_functions_with_novel_handler_cpp_labels"],
+                  "handler_cpp_candidate_samples":region["handler_source_candidates"][:18],
+              },sort_keys=True))
+          second_hop=report["original_executor_direct_callee_code_shapes"]
+          print("original_novel_unique_callee_code_regions="+
+                str(second_hop["verified_callee_fde_regions"]))
+          print("original_novel_second_hop_verified_handler_maps="+
+                str(second_hop["numeric_opcode_handler_mappings_proven"]))
+          for region in second_hop["callee_regions"]:
+              print("original_novel_callee_code_shape="+json.dumps({
+                  "fde_start_va":region["fde_start_va"],
+                  "fde_end_va":region["fde_end_va_exclusive"],
+                  "instructions":region["instruction_word_count"],
+                  "instruction_counts":region["instruction_class_counts"],
+                  "immediate_comparisons":region["small_immediate_cmp_histogram"],
+                  "overlapping_story_opcode_constants":
+                    region["observed_story_opcode_values_also_present_as_cmp_immediates"],
+                  "distinct_second_hop_BL_targets":
+                    region["unique_second_hop_direct_call_targets"],
+                  "second_hop_BL_count":region["second_hop_direct_call_count"],
+                  "second_hop_sample":region["second_hop_direct_call_sample"][:12]
+              },sort_keys=True))
+          for target in callees["callees"]:
+              print("novel_executor_original_BL_target="+json.dumps({
+                  "target_va":target["target_va"],
+                  "executable_section":target["target_executable_section"],
+                  "inbound_call_count":target["source_call_count"],
+                  "unwind_status":target["fde_status"],
+                  "fde_start":target["unwind_start_va"],
+                  "fde_end_exclusive":target["unwind_end_va_exclusive"],
+                  "is_fde_entry":target["target_is_fde_entry"],
+                  "novel_label_candidates_in_same_fde":
+                    target["novel_source_label_candidates_in_same_fde"],
+                  "label_candidate_samples":target["novel_source_label_samples"][:5],
+              },sort_keys=True))
+          for region in exact_region["regions"]:
+              print("original_executor_precise_region=" + json.dumps({
+                  "unwind_start_va": region["validated_unwind_start_va"],
+                  "unwind_end_va_exclusive": region["validated_unwind_end_va_exclusive"],
+                  "instruction_word_count": region["instruction_word_count"],
+                  "instruction_class_counts": region["instruction_class_counts"],
+                  "immediate_comparisons_up_to_256": region["immediate_comparisons_up_to_256"],
+                  "direct_call_count": region["direct_call_count"],
+                  "direct_call_sites": region["direct_call_sites"][:60],
+                  "indirect_sites": region["indirect_call_or_branch_sites"],
+                  "branches_within_region": region["branches_within_region"],
+                  "branches_outside_region": region["branches_outside_region"],
+              },sort_keys=True))
+          for row in unwind["sites"]:
+              print("original_executor_cfi_site=" + json.dumps(row,sort_keys=True))
+          for site in executor.get("sites", [])[:8]:
+              print("native_createNovel_code_neighborhood=" + json.dumps({
+                  "source_anchor_offset":site["anchor_file_offset"],
+                  "instruction_classes":site["instruction_classes"],
+                  "small_immediate_comparisons":site["small_immediate_cmp_histogram"],
+                  "bounded_control_flow_events":site["bounded_control_flow_events"][:8],
+              },sort_keys=True))
+          for row in report["candidate_referenced_labels"][:30]:
+              print("native_novel_code_reference=" + json.dumps({
+                  "kind": row["kind"],
+                  "label": row["original_label"],
+                  "instruction_sites": row["instruction_sites"][:8],
+                  "sites_truncated": row["instruction_site_count"] > 8
+              }, sort_keys=True))
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as out:
+              out.write("Original novel ELF .text label-reference candidates: " +
+                        str(report["code_site_candidates"]) +
+                        ". No numeric opcode/handler mapping verified.\n")
+          PY
+
+          python3 - "$local_dir/report.json" <<'PY'
+          import json, sys, os
+          with open(sys.argv[1], encoding="utf-8") as source:
+              report = json.load(source)
+          scan = report["story_address_candidates"]
+          print("ORIGINAL_ARM64_VERIFIED")
+          print("pristine_native_sha256=" + report["native_sha256"])
+          print("novel_marker_literal_total=" + str(sum(row["literal_hits"] for row in scan["markers"])))
+          print("elf_code_gate=" + scan["scan_scope"])
+          print("excluded_data_adr_bit_patterns=" + str(scan["excluded_noncode_arithmetic_matches"]))
+          # Print only bounded code-location metadata; never original native bytes.
+          for row in scan["markers"]:
+              print("marker_count=" + row["marker"] + ":" + str(row["literal_hits"]))
+              for location in row["locations"]:
+                  refs = location.get("address_references")
+                  if not refs or refs["candidate_count"] == 0:
+                      continue
+                  print("literal_reference=" + json.dumps({
+                      "marker": row["marker"],
+                      "literal_file_offset": location["file_offset"],
+                      "literal_virtual_address": location["virtual_address"],
+                      "candidate_count": refs["candidate_count"],
+                      "candidates": refs["candidates"],
+                      "truncated": refs["truncated"],
+                  }, separators=(",", ":"), sort_keys=True))
+          # Bounded, metadata-only nearby function/call classification.
+          # No source code bytes, disassembly instructions, key material or data.
+          code_context = report["story_code_context"]
+          print("native_context_status=" + code_context["status"])
+          print("native_context_site_count=" + str(code_context["candidate_site_count"]))
+          elf = report["story_elf_sections"]
+          print("elf_section_table_present=" + str(elf["section_table_present"]))
+          print("elf_section_count=" + str(elf["section_count"]))
+          sym = elf["named_symbols"]
+          print("elf_symbols_examined=" + str(sym["symbols_checked"]))
+          print("novel_named_symbols=" + str(sym["matching_symbol_count"]))
+          print("novel_named_symbol_types=" + json.dumps(sym["matching_symbol_types"], sort_keys=True))
+          for sample in sym["matching_symbol_samples"]:
+              print("novel_named_symbol_sample=" + json.dumps(sample, sort_keys=True))
+          for site in elf["candidate_locations"]:
+              print("elf_candidate_section=" + json.dumps(site, sort_keys=True))
+          for site in code_context["sites"]:
+              print("native_context_site=" + json.dumps({
+                  "marker": site["marker"],
+                  "literal_form": site["literal_form"],
+                  "xref_file_offset": site["xref_file_offset"],
+                  "xref_pattern": site["xref_pattern"],
+                  "possible_frame_start_offset": site["possible_frame_start_offset"],
+                  "first_following_return_offset": site["first_following_return_offset"],
+                  "window_control_flow_event_count": site["window_control_flow_event_count"],
+                  "window_control_flow_events": site["window_control_flow_events"],
+                  "window_events_truncated": site["window_events_truncated"],
+              }, separators=(",", ":"), sort_keys=True))
+          print("novel_marker_address_candidates_total=" + str(sum(
+              entry["address_references"]["candidate_count"]
+              for row in scan["markers"]
+              for entry in row["locations"]
+              if entry.get("address_references")
+          )))
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
+              summary.write("PINNED_ARM64_VERIFIED: pristine source binary SHA-256 matched. "
+                            "Literal references are **not** loader/decryptor proof; "
+                            "12 legacy mismatches remain blocked.\n")
+          PY

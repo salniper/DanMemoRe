@@ -1,0 +1,96 @@
+name: Android Legacy Import experimental build
+
+on:
+  push:
+    branches: [feature/legacy-import-guarded]
+    paths:
+      - ".github/workflows/legacy-android-build.yml"
+      - "android/danmemore-launcher/**"
+      - "tools/danmemore_server.cjs"
+      - "data/manifests/**"
+      - "data/danmemore-*.json"
+
+permissions:
+  contents: read
+
+jobs:
+  build-android:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Install Android SDK, NDK and CMake
+        run: |
+          SDK_ROOT="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
+          SDKMANAGER="$(find "$SDK_ROOT/cmdline-tools" -maxdepth 3 -type f -name sdkmanager | head -n 1)"
+          test -x "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses > /dev/null || true
+          "$SDKMANAGER" --install "platforms;android-36" "build-tools;36.0.0" "ndk;27.2.12479018" "cmake;3.22.1"
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.14.3"
+      - name: Fetch pinned Node Mobile 24 ARM64 runtime
+        env:
+          NODE_MOBILE_SHA256: d6fd9f610fe5d81fede8f0d400c5a62723247725a19831835f15abf4f0604250
+        run: |
+          curl --fail --location --retry 3 --retry-delay 2 \
+            "https://github.com/fogtape/nodejs-mobile/releases/download/v24.22.1-0/nodejs-mobile-android-24.22.1-0.zip" \
+            --output "$RUNNER_TEMP/node-mobile.zip"
+          echo "$NODE_MOBILE_SHA256  $RUNNER_TEMP/node-mobile.zip" | sha256sum --check -
+          python3 - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile
+          import os
+          import shutil
+          archive = Path(os.environ["RUNNER_TEMP"]) / "node-mobile.zip"
+          target = Path(os.environ["RUNNER_TEMP"]) / "danmemore-libnode"
+          library_suffix = "bin/arm64-v8a/libnode.so"
+          with ZipFile(archive) as z:
+              contents = set(z.namelist())
+              matches = [name for name in contents if name.endswith(library_suffix)]
+              assert len(matches) == 1, f"expected one ARM64 libnode.so: {matches}"
+              prefix = matches[0][:-len(library_suffix)]
+              assert prefix + "include/node/node.h" in contents, "node.h header missing"
+              selected = [name for name in contents if (
+                  name == matches[0] or name.startswith(prefix + "include/node/")
+              ) and not name.endswith("/")]
+              for name in selected:
+                  relative = name[len(prefix):]
+                  parts = Path(relative).parts
+                  assert ".." not in parts and not relative.startswith("/"), relative
+                  destination = target / relative
+                  destination.parent.mkdir(parents=True, exist_ok=True)
+                  with z.open(name) as src, destination.open("wb") as dst:
+                      shutil.copyfileobj(src, dst)
+          assert (target / library_suffix).is_file()
+          assert (target / "include/node/node.h").is_file()
+          print(f"Node Mobile staged at {target} (ARM64 only)")
+          PY
+      - name: Compile experimental isolated APK
+        env:
+          DANMEMORE_LIBNODE_DIR: ${{ runner.temp }}/danmemore-libnode
+        run: |
+          gradle -p android/danmemore-launcher :app:assembleDebug \
+            -PdanmemoreLauncherApplicationId=dev.danmemore.launcher.legacytest \
+            --no-daemon --stacktrace
+      - name: Verify package ID and bundled native libraries
+        run: |
+          APK="android/danmemore-launcher/app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$APK"
+          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$APK" | grep -F "package: name='dev.danmemore.launcher.legacytest'"
+          unzip -Z1 "$APK" | grep -Fx "lib/arm64-v8a/libnode.so"
+          unzip -Z1 "$APK" | grep -Fx "lib/arm64-v8a/libdanmemore_node_bridge.so"
+      - name: Store experimental debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: DanMemoRe-Legacy-Experimental-Debug
+          path: android/danmemore-launcher/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 7

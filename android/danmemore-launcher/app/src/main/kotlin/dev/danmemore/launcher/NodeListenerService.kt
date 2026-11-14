@@ -87,7 +87,7 @@ class NodeListenerService : Service() {
         const val ACTION_STATUS = "dev.danmemore.launcher.listener.STATUS"
         const val EXTRA_PROFILE = "profile"
         const val EXTRA_MESSAGE = "message"
-        const val INTERNAL_PERMISSION = "dev.danmemore.launcher.INTERNAL_STATUS"
+        val INTERNAL_PERMISSION: String = BuildConfig.APPLICATION_ID + ".INTERNAL_STATUS"
         private const val CHANNEL_ID = "danmemore_listener"
         private const val NOTIFICATION_ID = 6601
     }
