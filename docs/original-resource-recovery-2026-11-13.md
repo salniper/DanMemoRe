@@ -112,3 +112,9 @@ python3 tools/verify_remaining_legacy_candidates.py \\
 過去比對 12 個異常資源時只看 **basename**，可能遺漏裝在其他路徑的相同位元組。新版 `audit_original_xapk_asset_candidates.py` 在所有內嵌 APK 安全 ZIP 成員中以 12 個目標 reference size 篩選，再以 MD5 驗證；維持原始 XAPK SHA-1 與 ARM64 native SHA-256 的驗證門檻。列出檔名相符與**任意檔名的完全相同位元組**兩類數量，未找到的檔案不得視為已恢復。新增改名精確命中、同長不同雜湊及掃描候選上限合成測試。
 
 本變更只在原 Draft PR 與隔離 CI 測試，沒有將私有原版位元組加入 Git、沒有修改使用者備份、沒有對 AYN Thor 安裝。原版 XAPK 執行結果以 CI 真實報告為準。
+
+### 2026-11-14｜原版實測：全路徑內容指紋掃描結果
+
+[GitHub Actions 原始 EU 15.1.0 XAPK 實測](https://github.com/salniper/DanMemoRe/actions/runs/43566946806) 已完成並成功驗證來源（`ORIGINAL_ARM64_VERIFIED`）。搜尋全部六個內嵌 APK 的安全 ZIP 成員，按剩餘 12 個 reference size 篩選，合計 **2 個**大小符合的 ZIP 成員進入 MD5 比對；**0/12** 目標在任意路徑找到 reference size+MD5 完全一致的檔案。原本的 basename 精確搜尋也仍是 **0/12**。
+
+這是**實際原始安裝包 ZIP 成員**的排除結果，不是全部遊戲內容來源的否定：歷史安裝後下載的完整快取、OBB、其他 container 格式、其他版本區域仍未掃到。下一步必須取得**獨立、版本可溯源的完整遊戲快取／歷史來源**，逐項驗證 12 個目標；不可將同一份備份的鏡像認作獨立來源，也不可用這個陰性結果放寬 MD5 import gate。遊戲素材位元組沒有提交或散佈。
