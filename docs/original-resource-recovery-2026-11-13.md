@@ -299,3 +299,28 @@ python3 tools/assemble_reference_exact_recovery.py \
 **環境現況：** 本次查看 ChatGPT Library 最近 4 頁（800 條清單，尚有更多頁；而且遞迴 Google Drive Library 列表受限），有原始稽核 JSON、19 檔 payload、33+7 的 40 檔 v2 overlay，但未辨識到可存取的完整 **14 GB 六分卷 RAR 或解壓後 contents**。連結的 Drive 檔名搜尋 `contents-complete`、`DanMemoRe`、`com.eu.danmemo`、`MemoriaFreese`、`danmemo` 均未找到可用檔案，**這只是目前存取／搜尋範圍內的否定，不代表使用者本機沒有備份**。因此不能執行完整 14 GB 真實素材的唯讀查驗，也不能宣稱補回 12 個版本不符檔案或 1,544 張抽卡原圖。
 
 **本輪工作範圍：** 修正整合器程式碼＋補待執行回歸案例＋註明來源限制；遵守 `AGENTS.md`「封包實作未完成前不執行測試、建置或 GitHub Actions」要求，**沒有執行新增測試、沒有觸發手動 CI、沒有安裝 APK 或接觸使用者原始 RAR**。PR #1 仍 Draft，`main` 和裝置未動。完成全部資源來源驗證後仍需獨立通過 original runtime story/battle/gacha/save 驗收，絕不從檔案 MD5 自動推論遊戲可玩。
+
+
+## 2026-11-14｜Android 內容匯入回復交易：失敗與中斷時保住上一份快取
+
+對 [`ContentImportService.kt`](../android/danmemore-launcher/app/src/main/kotlin/dev/danmemore/launcher/ContentImportService.kt) 的既有「從 14 GB ZIP 匯入 → 私有 staging → rename 啟用」流程進行**來源碼審查**，找到一個會導致使用者已可用的舊內容快取無法被正常還原的邏輯缺陷：
+
+- 舊版在 `staging.renameTo(active)` 成功後立刻進行 `DanMemoContentCache.activeRoot` 驗證；當驗證失敗時，`active` **依然存在**（即使內容不可用），catch 分支卻只在 `!active.exists()` 時才將 `.previous` 重新更名為 `active`。因此驗證失敗後，原版舊快取有可能滯留在 `.previous`，而無法被 launcher 正常載入。
+- 原版舊流程在每次開始切換快取前，也直接清除舊 `.previous`；若上一輪剛好中斷在「舊 active 已移至 previous，新的 active 尚未寫入」的階段，這可能刪掉僅存的可用快取。
+
+本輪已**修改程式碼、但尚未執行測試**：
+
+1. 在複製新 ZIP 前先呼叫 `recoverInterruptedActivation(active, previous)`，如果上一輪中斷造成 `active` 不存在、`.previous` 存在，先還原原快取；若同時有 `active` 與 `.previous`，則根據既有的 `activeRoot` marker/root 檢查，保留有效的 active 或移除無效 active 並還原 previous。不必等待重新讀入 14 GB 才嘗試救回舊內容。
+2. 記錄是否真的成功將新 staging 更名為 active（`newCacheActivated`），在最終驗證失敗時**先移除錯誤的新 active，再把 previous 還原**，不再以 `active.exists()` 代表成功。若清除無效 active 或還原 previous 失敗，使用明確錯誤訊息，`.previous` 不直接被當成垃圾刪掉。
+3. 只有新 active 已通過當前的最終 marker/root 檢查後才清理 `.previous`；清理失敗仍保留新快取與告警，而不是撤銷已完成匯入。
+
+**待全部 packet 實作完成後再跑的驗收案例（本輪僅列規格，不執行）：**
+
+- 原有 active 有效，新 staging 更名**之前**失敗 → 原有 active 應保持可用。
+- 原有 active 有效，新 staging 更名**之後** marker/root 驗證失敗 → 無效新 active 移除，舊 previous 還原。
+- 程序中斷在「active → previous、尚未 staging → active」→ 重新進入匯入前，舊 previous 先回到 active。
+- 上次啟用已成功但刪除 `.previous` 前中斷 → 新 active 必須優先保留，僅清理過期 previous。
+- 新 active 無效但仍佔據路徑、舊 previous 有效 → 不得先刪除 previous。
+- 故意讓刪除壞 active 或 previous→active rename 失敗 → 清楚回報、保留可恢復舊快取，不得錯誤宣稱匯入成功。
+
+**驗證界線：** 這是資源匯入的**交易回復程式修正**，不代表新 14 GB 快取已取得、完整 1,556 個未解決資源已恢復，或原版戰鬥／抽卡／存檔已可玩。依專案 `AGENTS.md`，封包工作未完成前只進行程式修改與撰寫待測規格，不主動跑測試、編譯、觸發 GitHub Actions、安裝或重啟 listener；PR 保持 Draft、main／原始 RAR／裝置均未改動。原始應用程式未覆寫，修正尚未過 Android 真機驗收。
