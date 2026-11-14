@@ -235,3 +235,30 @@ python3 tools/verify_remaining_legacy_candidates.py \\
 **保存位置：** 生成套件已在**這次 ChatGPT 對話的隔離工作環境**建立並提供下載，不在 GitHub 程式庫，也**不表示使用者已下載、安裝或套用**。不用急著下載；未來若需重建，必須從 SHA-pinned 原始 APK + 使用者既有 reference-exact 7 Manifest 套件再逐項核驗，不能改從未驗證鏡像直接採用。
 
 **適用範圍限制：** 這份 ZIP 是**部分原版資料獨立 overlay**，不是完整遊戲。剩下 **12 個不符 MD5 的舊備份內容**與 **1,544 項 Phase-3 缺少實體參考原圖**尚未補齊，25 個觀察到的劇情 opcode 仍然 **0/25 原版 handler 已映射**。不得將此套件當作已通過 Legacy Import、劇情、戰鬥、抽卡或 AYN Thor 真機驗收；不得覆蓋歷史 RAR、原 APK、`contents`、已安裝 App 或 `main`，PR #1 保持 Draft。
+
+
+## 2026-11-14｜完整原版檔案恢復的 fail-closed 整合器（不代表遊戲已修好）
+
+新增 [`tools/assemble_reference_exact_recovery.py`](../tools/assemble_reference_exact_recovery.py) 與 [合成安全驗證](../tools/test_assemble_reference_exact_recovery.py)。這是**只接受完整 reference-exact 輸入**的單次修復整合路徑，避免一邊找到素材、一邊錯誤宣稱已完成。
+
+- 必須提供使用者的 2026-11-10 稽核 JSON 與已重建、全部 reference-MD5 相符的 **40 檔 v2 overlay ZIP**；會再次完整重算 33 啟動素材及 7 個 phase.manifest 的參考大小／MD5，防止舊 ZIP 被更動。
+- 接受一個或多個額外 **獨立候選 ZIP**，直接掃 ZIP、不解壓整份遊戲快取。6 個劇情檔 + 4 個 Master + 2 個視覺檔，以原版的 reference **size + MD5** 跨檔名精確搜尋；1,544 張背景只接受原版稽核指出的**精確路徑**和 reference size + MD5。
+- 對索引筆數、路徑穿越、壓縮成員類型、symlink、加密 ZIP、單檔大小、累計解壓讀取量設上限；任何缺失、來源位元組變動或同名錯誤都**不得**經由 `--apply` 輸出不完整成果。
+- 只有 **40 + 12 + 1,544 = 1,596** 項全部通過參考指紋時，才允許產生**全新、隔離、非覆寫**的資料夾；仍須通過完整 14 GB 快取的分相匯入和原版 native 實機驗收才可稱遊戲復原。
+- 不提交任何遊戲原版位元組、解密金鑰、存檔或外部 APK 到 GitHub。來源的歷史獨立性仍需另行查證，不可單靠工具輸出的 MD5 命中判定。
+
+在持有資料的本機，只讀檢查：
+
+```sh
+python3 tools/assemble_reference_exact_recovery.py \
+  --audit '/path/to/danmemore_legacy_audit.json' \
+  --verified40 '/path/to/DanMemoRe_Original_40_ByteExact_Overlay_v2.zip' \
+  --candidate-zip '/path/to/independent-cache-1.zip' \
+  --candidate-zip '/path/to/independent-cache-2.zip'
+```
+
+取得 **全部 1,556 項新的** reference-exact 來源、確認輸出目的地尚未存在後，才考慮 `--output-dir /path/to/new-separate-overlay --apply`。任何原版 import 授權或掌機驗收都必須另行進行。
+
+**本輪真實使用者輸入的結果：** 對 Library 內 `danmemore_19_payload.json` 重新解碼逐項對照實際稽核，並將其中 12 個異常原始位元組放進**臨時、未對外發佈**的候選 ZIP；再次查得 **reference-exact 命中 0/12**。已驗證的 40 檔 v2 package 在本輪重新逐項通過；現有輸入沒有新增的 1,544 項 PNG 位元組，所以 reference-exact 新增為 **0/1,544**。沒有產生新的完整遊戲 ZIP，沒有修改使用者原始資料、既有 v2 套件或 AYN Thor。
+
+在本輪獨立隔離工作環境中執行純合成驗證：1,596 檔全命中時新資料夾可建立且逐檔內容正確、沒有候選時不得 staging、ZIP 內穿越路徑拒絕、40 檔 overlay 一旦遭更動即拒絕；四類案例成功。**這不等於 GitHub CI 或原版實機驗收已執行**。目前 12 個加密／視覺來源、1,544 張原圖與 25 個未映射劇情 opcode 仍未完成，原版完整戰鬥、抽卡、持續存檔亦未完成最終驗收，PR 維持 Draft。
