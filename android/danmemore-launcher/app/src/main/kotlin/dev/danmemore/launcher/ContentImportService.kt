@@ -82,14 +82,42 @@ class ContentImportService : Service() {
 internal object DanMemoContentCache {
     private const val MARKER = ".danmemore-content.json"
 
+    private fun validRoot(root: File): Boolean {
+        val marker = runCatching { JSONObject(File(root, MARKER).readText(Charsets.UTF_8)) }.getOrNull() ?: return false
+        if (marker.optInt("schemaVersion") != 1 || marker.optLong("archiveFiles") < 1L ||
+            marker.optLong("expandedBytes") < 1L || marker.optInt("verifiedAssets") < 1) return false
+        if (CONTENT_ROOTS.any { !File(root, it).isDirectory }) return false
+        if ((1..8).any { !File(root, "$it/project.manifest").isFile }) return false
+        return true
+    }
+
     fun activeRoot(context: Context): File? {
         val root = File(File(context.filesDir, "danmemore/content"), "active")
-        val marker = runCatching { JSONObject(File(root, MARKER).readText(Charsets.UTF_8)) }.getOrNull() ?: return null
-        if (marker.optInt("schemaVersion") != 1 || marker.optLong("archiveFiles") < 1L ||
-            marker.optLong("expandedBytes") < 1L || marker.optInt("verifiedAssets") < 1) return null
-        if (CONTENT_ROOTS.any { !File(root, it).isDirectory }) return null
-        if ((1..8).any { !File(root, "$it/project.manifest").isFile }) return null
-        return root
+        return root.takeIf(::validRoot)
+    }
+
+    internal fun isPreviousCacheValidForRecovery(context: Context): Boolean =
+        validRoot(File(File(context.filesDir, "danmemore/content"), ".previous"))
+
+    // Invoked ONLY from a worker thread when a launch finds no valid active
+    // cache. The same monitor guards import activation, so a launch cannot
+    // mistake the importer's intermediate rename state for a crashed import.
+    internal fun restorePreviousForLaunch(context: Context): Boolean = synchronized(this) {
+        val cacheRoot = File(context.filesDir, "danmemore/content")
+        val active = File(cacheRoot, "active")
+        if (validRoot(active)) return@synchronized true
+        val previous = File(cacheRoot, ".previous")
+        if (!validRoot(previous)) return@synchronized false
+        if (active.exists()) check(active.deleteRecursively()) {
+            "invalid active cache could not be removed; previous cache retained"
+        }
+        check(previous.renameTo(active)) {
+            "previous content cache could not be restored; it remains in .previous"
+        }
+        check(validRoot(active)) {
+            "restored content cache failed its normal marker/root validation"
+        }
+        true
     }
 
     internal val CONTENT_ROOTS = listOf("1", "2", "3", "4", "5", "6", "7", "8",
@@ -123,7 +151,7 @@ private class ContentImporter(private val context: Context) {
         // Make an interrupted previous import recoverable BEFORE reading a
         // possibly huge new ZIP. The launcher may otherwise have no active
         // resources until another full archive import finishes.
-        recoverInterruptedActivation(active, previous)
+        synchronized(DanMemoContentCache) { recoverInterruptedActivation(active, previous) }
 
         val archiveBytes = context.contentResolver.openAssetFileDescriptor(uri, "r")?.use { it.length }.takeIf { it != null && it > 0L }
         if (archiveBytes != null) {
@@ -157,37 +185,39 @@ private class ContentImporter(private val context: Context) {
                 Charsets.UTF_8,
             )
 
-            val hadActive = active.exists()
-            if (hadActive) {
-                check(active.renameTo(previous)) { "could not preserve the active content cache" }
-            }
-            var newCacheActivated = false
-            try {
-                check(staging.renameTo(active)) { "could not activate the verified content cache" }
-                newCacheActivated = true
-                check(DanMemoContentCache.activeRoot(context) != null) {
-                    "activated content failed its final validation"
+            synchronized(DanMemoContentCache) {
+                val hadActive = active.exists()
+                if (hadActive) {
+                    check(active.renameTo(previous)) { "could not preserve the active content cache" }
                 }
-            } catch (error: Throwable) {
-                // A successfully renamed, but invalid, active directory still
-                // exists. Do not use existence as evidence of valid activation.
-                // Preserve .previous if deleting the invalid new cache fails.
-                if (newCacheActivated && active.exists() && !active.deleteRecursively()) {
-                    throw IllegalStateException(
-                        "invalid active cache could not be removed; previous cache retained", error
-                    )
+                var newCacheActivated = false
+                try {
+                    check(staging.renameTo(active)) { "could not activate the verified content cache" }
+                    newCacheActivated = true
+                    check(DanMemoContentCache.activeRoot(context) != null) {
+                        "activated content failed its final validation"
+                    }
+                } catch (error: Throwable) {
+                    // A successfully renamed, but invalid, active directory still
+                    // exists. Do not use existence as evidence of valid activation.
+                    // Preserve .previous if deleting the invalid new cache fails.
+                    if (newCacheActivated && active.exists() && !active.deleteRecursively()) {
+                        throw IllegalStateException(
+                            "invalid active cache could not be removed; previous cache retained", error
+                        )
+                    }
+                    if (hadActive && previous.exists() && !previous.renameTo(active)) {
+                        throw IllegalStateException(
+                            "previous content cache could not be restored; it remains in .previous", error
+                        )
+                    }
+                    throw error
                 }
-                if (hadActive && previous.exists() && !previous.renameTo(active)) {
-                    throw IllegalStateException(
-                        "previous content cache could not be restored; it remains in .previous", error
-                    )
+                // The new active cache has passed the final marker/root check.
+                // A cleanup failure is not a reason to undo a successful import.
+                if (hadActive && !previous.deleteRecursively()) {
+                    progress("Content import complete; previous cache retained for cleanup")
                 }
-                throw error
-            }
-            // The new active cache has passed the final marker/root check.
-            // A cleanup failure is not a reason to undo a successful import.
-            if (hadActive && !previous.deleteRecursively()) {
-                progress("Content import complete; previous cache retained for cleanup")
             }
         } catch (error: Throwable) {
             staging.deleteRecursively()
@@ -199,6 +229,12 @@ private class ContentImporter(private val context: Context) {
 
     private fun recoverInterruptedActivation(active: File, previous: File) {
         if (!previous.exists()) return
+        // The preserved snapshot must independently pass launcher-root
+        // validation before any invalid active directory is removed.
+        if (DanMemoContentCache.activeRoot(context) == null &&
+            !DanMemoContentCache.isPreviousCacheValidForRecovery(context)) {
+            error("previous content cache is not verified; retaining both snapshots")
+        }
         if (!active.exists()) {
             check(previous.renameTo(active)) {
                 "could not restore the cache preserved by the interrupted import"
