@@ -152,15 +152,58 @@ private class ContentImporter(private val context: Context) {
                 Charsets.UTF_8,
             )
 
-            previous.deleteRecursively()
-            if (active.exists()) check(active.renameTo(previous)) { "could not preserve the active content cache" }
+            // Recover an interrupted prior activation before rotating any
+            // more cache directories. If an invalid new active cache exists,
+            // the preserved previous cache must win over the broken one.
+            if (previous.exists()) {
+                if (!active.exists()) {
+                    check(previous.renameTo(active)) {
+                        "could not restore the cache preserved by the interrupted import"
+                    }
+                } else if (DanMemoContentCache.activeRoot(context) != null) {
+                    check(previous.deleteRecursively()) {
+                        "could not remove a stale previous content cache"
+                    }
+                } else {
+                    check(active.deleteRecursively()) {
+                        "invalid active cache could not be removed; previous cache retained"
+                    }
+                    check(previous.renameTo(active)) {
+                        "could not restore previous content cache after interrupted import"
+                    }
+                }
+            }
+            val hadActive = active.exists()
+            if (hadActive) {
+                check(active.renameTo(previous)) { "could not preserve the active content cache" }
+            }
+            var newCacheActivated = false
             try {
                 check(staging.renameTo(active)) { "could not activate the verified content cache" }
-                check(DanMemoContentCache.activeRoot(context) != null) { "activated content failed its final validation" }
-                previous.deleteRecursively()
+                newCacheActivated = true
+                check(DanMemoContentCache.activeRoot(context) != null) {
+                    "activated content failed its final validation"
+                }
             } catch (error: Throwable) {
-                if (!active.exists() && previous.exists()) previous.renameTo(active)
+                // A successfully renamed, but invalid, active directory still
+                // exists. Do not use existence as evidence of valid activation.
+                // Preserve .previous if deleting the invalid new cache fails.
+                if (newCacheActivated && active.exists() && !active.deleteRecursively()) {
+                    throw IllegalStateException(
+                        "invalid active cache could not be removed; previous cache retained", error
+                    )
+                }
+                if (hadActive && previous.exists() && !previous.renameTo(active)) {
+                    throw IllegalStateException(
+                        "previous content cache could not be restored; it remains in .previous", error
+                    )
+                }
                 throw error
+            }
+            // The new active cache has passed the final marker/root check.
+            // A cleanup failure is not a reason to undo a successful import.
+            if (hadActive && !previous.deleteRecursively()) {
+                progress("Content import complete; previous cache retained for cleanup")
             }
         } catch (error: Throwable) {
             staging.deleteRecursively()
