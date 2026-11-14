@@ -158,8 +158,10 @@ class ExactRestorationTests(unittest.TestCase):
             audit_path.write_text(json.dumps(audit),encoding='utf-8')
             owner_sha=hashlib.sha256(audit_path.read_bytes()).hexdigest()
             overlay_sha=hashlib.sha256(overlay.read_bytes()).hexdigest()
-            with patch.object(recover,'PINNED_OWNER_AUDIT_SHA256',owner_sha), \\
-                 patch.object(recover,'PINNED_VERIFIED40_SHA256',overlay_sha):
+            with (
+                patch.object(recover,'PINNED_OWNER_AUDIT_SHA256',owner_sha),
+                patch.object(recover,'PINNED_VERIFIED40_SHA256',overlay_sha),
+            ):
                 self.assertEqual(len(recover.load_pinned_owner_inputs(
                     audit_path,overlay)['issues']),1596)
                 audit_path.write_text(audit_path.read_text()+' ',encoding='utf-8')
