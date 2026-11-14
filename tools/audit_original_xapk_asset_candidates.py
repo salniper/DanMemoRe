@@ -44,6 +44,7 @@ MAX_APK_MEMBERS = 48
 MAX_BASENAME_HITS = 4096
 MAX_RESULT_SAMPLES = 12
 MAX_CANDIDATE_BYTES = 32 * 1024 * 1024
+MAX_SIZE_FILTER_CANDIDATES = 250_000
 
 
 def member_path_safe(info: zipfile.ZipInfo) -> bool:
@@ -58,39 +59,59 @@ def member_path_safe(info: zipfile.ZipInfo) -> bool:
 
 
 def audit_member(blob: bytes, package: str, details: dict):
+    """Scan all safe ZIP entries by pinned byte length, including renamed ones.
+
+    An exact size + MD5 match is provenance evidence, never permission to
+    replace an asset at a different path or bypass legacy import guards.
+    """
+    by_size = {}
+    for path, (size, digest) in REFERENCE.items():
+        by_size.setdefault(size, []).append((path, digest))
     with zipfile.ZipFile(BytesIO(blob)) as apk:
         for info in apk.infolist():
             if not member_path_safe(info):
                 continue
-            # Check exact final names as candidates; placement may differ by split.
-            name = PurePosixPath(info.filename).name
-            relevant = [(target, expected) for target, expected in REFERENCE.items()
-                        if name == PurePosixPath(target).name]
-            if not relevant:
-                continue
-            for target, (expected_size, expected_md5) in relevant:
-                row = details[target]
+            base = PurePosixPath(info.filename).name
+            named = [path for path in REFERENCE
+                     if PurePosixPath(path).name == base]
+            for path in named:
+                row = details[path]
                 row["basename_occurrences"] += 1
                 if row["basename_occurrences"] > MAX_BASENAME_HITS:
                     raise ValueError("too many repeated candidate filenames")
-                if info.file_size != expected_size:
+                if info.file_size != REFERENCE[path][0]:
                     row["wrong_size_occurrences"] += 1
-                    continue
-                if not 0 < info.file_size <= MAX_CANDIDATE_BYTES:
-                    raise ValueError("unexpected oversized candidate")
-                with apk.open(info) as reader:
-                    candidate = reader.read(expected_size + 1)
-                if len(candidate) != expected_size:
-                    raise ValueError("candidate decompressed size mismatch")
-                digest = hashlib.md5(candidate).hexdigest()
-                if digest == expected_md5:
-                    row["reference_exact_occurrences"] += 1
-                    if len(row["reference_exact_locations"]) < MAX_RESULT_SAMPLES:
-                        row["reference_exact_locations"].append({
+            targets = by_size.get(info.file_size)
+            if not targets:
+                continue
+            details["_stats"]["size_filtered_zip_entries_hashed"] += 1
+            if details["_stats"]["size_filtered_zip_entries_hashed"] > MAX_SIZE_FILTER_CANDIDATES:
+                raise ValueError("excessive size-filter candidates")
+            if not 0 < info.file_size <= MAX_CANDIDATE_BYTES:
+                raise ValueError("invalid candidate size")
+            with apk.open(info) as reader:
+                content = reader.read(info.file_size + 1)
+            if len(content) != info.file_size:
+                raise ValueError("candidate decompressed size mismatch")
+            digest = hashlib.md5(content).hexdigest()
+            for path, expected_digest in targets:
+                row = details[path]
+                exact = digest == expected_digest
+                if path in named:
+                    if exact:
+                        row["reference_exact_occurrences"] += 1
+                        if len(row["reference_exact_locations"]) < MAX_RESULT_SAMPLES:
+                            row["reference_exact_locations"].append({
+                                "apk": package, "entry": info.filename
+                            })
+                    else:
+                        row["same_size_nonmatching_occurrences"] += 1
+                if exact:
+                    row["reference_exact_any_name_occurrences"] += 1
+                    if len(row["reference_exact_any_name_locations"]) < MAX_RESULT_SAMPLES:
+                        row["reference_exact_any_name_locations"].append({
                             "apk": package, "entry": info.filename
                         })
-                else:
-                    row["same_size_nonmatching_occurrences"] += 1
 
 
 def scan_members(path: Path) -> dict:
@@ -103,8 +124,11 @@ def scan_members(path: Path) -> dict:
             "same_size_nonmatching_occurrences": 0,
             "reference_exact_occurrences": 0,
             "reference_exact_locations": [],
+            "reference_exact_any_name_occurrences": 0,
+            "reference_exact_any_name_locations": [],
         } for target, (expected_size, expected_md5) in REFERENCE.items()
     }
+    details["_stats"] = {"size_filtered_zip_entries_hashed": 0}
     nested = []
     with zipfile.ZipFile(path) as outer:
         candidates = [entry for entry in outer.infolist()
@@ -120,15 +144,19 @@ def scan_members(path: Path) -> dict:
                 raise ValueError("invalid nested APK contents")
             audit_member(apk, item.filename, details)
             nested.append(item.filename)
+    scan_stats = details.pop("_stats")
     return {
         "status": "ZIP_MEMBER_PROVENANCE_ONLY_NOT_IMPORT_AUTHORIZATION",
         "nested_apk_count": len(nested),
         "checked_apks": nested,
         "reference_exact_target_count": sum(bool(row["reference_exact_occurrences"])
                                             for row in details.values()),
+        "reference_exact_target_count_any_name": sum(
+            bool(row["reference_exact_any_name_occurrences"]) for row in details.values()),
+        "size_filtered_zip_entries_hashed": scan_stats["size_filtered_zip_entries_hashed"],
         "targets": details,
         "limitations": (
-            "Matches establish candidate bytes in verified original XAPK ZIP entries only; "
+            "Only exact size and MD5 establish candidate bytes in verified XAPK members. "
             "path mapping and source entitlement must still be checked before any use. "
             "No match does not exclude assets in other data containers or remote caches."
         ),
