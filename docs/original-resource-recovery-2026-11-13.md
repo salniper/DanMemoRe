@@ -133,3 +133,23 @@ python3 tools/verify_remaining_legacy_candidates.py \\
 ```
 
 **驗證界線：** 只有取得版本、日期可溯源且與目前資料不共用同一保存副本的候選來源，才能宣稱「獨立」；即使比對出 reference MD5，也不能跳過完整匯入及 AYN Thor 真機驗收。這一輪沒有取得第二份可驗證完整快取，故剩餘 12 個維持未解決。
+
+
+## 2026-11-14｜公開歷史備份之六檔實際位元組交叉驗證
+
+**直接讀取公開 Google Drive 保存目錄中的六個原版檔案**，以檔案實際內容重新計算 MD5，再與使用者 2026-11-10 的 `danmemore_legacy_audit 3(1).json` 比對。不是只看檔名、資料夾或大小。來源根目錄：[公開 1～8 階段遊戲保存資料](https://drive.google.com/drive/folders/1xqzfdevOO7ph1ppck9t8TiwzJVXpr4Yb)。
+
+| 實際下載的來源檔案 | Bytes | 來源 MD5 | 與使用者 actual MD5 | 與目標 reference MD5 |
+|---|---:|---|---|---|
+| [`1/files/font/number.png`](https://drive.google.com/file/d/10R6WbzibeaPdk4j9p84Kiwo9rjY477nG/view) | 7,381 | `6a4472aceca14d70941cf36550f8475c` | 相同 | **不同** |
+| [`3/files/ui_atlas/home_gacha/gacha_top_move_parts_text.json`](https://drive.google.com/file/d/1AyGqmjguRJak07rA6FXKz0HwkPGMgZm9/view) | 4,267 | `8f9fc8481cdd78e7096d011414979214` | 相同 | **不同** |
+| [`1/master/divide_enc/adventureMission.enc`](https://drive.google.com/file/d/11OBZg2uVM-9UkRM38W33cmCLOCRA45ia/view) | 3,264 | `1d2535a366dae1a9a9eea2318f9d2291` | 相同 | **不同** |
+| [`1/master/divide_enc/downloadVoicePhase.enc`](https://drive.google.com/file/d/1BOkdzkeAmBs5ynNVni5_l39Amf6qilsT/view) | 480 | `fa0a993ffded0d9cc82648a190fe5c4d` | 相同 | **不同** |
+| [`1/master/divide_enc/lotteryWeightGroup.enc`](https://drive.google.com/file/d/1cPDa01KZCqtyXNIOQ8K_unkRuRwwg5s8/view) | 1,824 | `2db4673d890dacec2463e74219ae8b79` | 相同 | **不同** |
+| [`1/master/divide_enc/subscription.enc`](https://drive.google.com/file/d/1xg63X5Z5Qcjy-jJNez2IiIsQwVDFG-j3/view) | 8,272 | `42d7c60903489c4261ea67721ff3f1fa` | 相同 | **不同** |
+
+**結果：6/6 與使用者原始異常備份 byte-exact 相同，0/6 符合目標 reference MD5。** 來源本身的歷史版本仍未獨立認證，所以這是同位元組重複的確證，不是可證明正確的第二份來源。這份 Google Drive 的文件 `Directory.txt` 也註明某些歷史素材可能未保留，不代表版本完整。
+
+另外六個 `novelCommand*.enc` 未完成這種雲端實際位元組交叉驗證：雲端原版劇情目錄包含很多檔案，目前頁面清單最多只顯示首批 1,000 個，無法依此宣稱它們的 MD5。它們仍僅具有使用者自己備份已解密、結構分析的證據，**不是已修復**。
+
+下輪應尋找與上述來源及使用者歷史備份 **不同來源且版本可追溯** 的 2023–2024 完整快取，優先六個劇情檔。任何來源必須逐項對比 size+MD5 才可進入備援候選；無法找到時不放寬 import 完整性驗證。未將下載到的原版遊戲位元組提交到 Git、發佈成 Release 或推入掌機。PR 仍 Draft。
