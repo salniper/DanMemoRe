@@ -56,6 +56,48 @@ class OriginalXapkCandidateTests(unittest.TestCase):
                          "com.eu.danmemo.apk")
         self.assertFalse(result["legacy_import_authorized"])
 
+    def test_renamed_asset_can_match_by_hash_without_import_approval(self):
+        import hashlib
+        payload = b"synthetic renamed asset"
+        self.make_xapk({"com.eu.danmemo.apk": archive([
+            ("assets/renamed/unknown.dat", payload),
+        ])})
+        with patch.dict(audit.REFERENCE, {
+            "1/files/font/number.png": (
+                len(payload), hashlib.md5(payload).hexdigest())
+        }):
+            result = audit.scan_members(self.file)
+        self.assertEqual(result["reference_exact_target_count"], 0)
+        self.assertEqual(result["reference_exact_target_count_any_name"], 1)
+        self.assertEqual(result["targets"]["1/files/font/number.png"]
+                         ["reference_exact_any_name_locations"][0]["entry"],
+                         "assets/renamed/unknown.dat")
+        self.assertFalse(result["legacy_import_authorized"])
+
+    def test_wrong_hash_same_size_not_promoted(self):
+        payload = b"synthetic wrong hash"
+        self.make_xapk({"com.eu.danmemo.apk": archive([
+            ("renamed.bin", payload),
+        ])})
+        with patch.dict(audit.REFERENCE, {
+            "1/files/font/number.png": (len(payload), "0" * 32)
+        }):
+            result = audit.scan_members(self.file)
+        self.assertEqual(result["reference_exact_target_count_any_name"], 0)
+        self.assertGreater(result["size_filtered_zip_entries_hashed"], 0)
+
+    def test_size_filter_budget_fail_closed(self):
+        payload = b"synthetic renamed asset"
+        self.make_xapk({"com.eu.danmemo.apk": archive([
+            ("renamed.bin", payload),
+        ])})
+        with patch.dict(audit.REFERENCE, {
+            "1/files/font/number.png": (len(payload), "0" * 32)
+        }):
+            with patch.object(audit, "MAX_SIZE_FILTER_CANDIDATES", 0):
+                with self.assertRaisesRegex(ValueError, "size-filter"):
+                    audit.scan_members(self.file)
+
     def test_size_mismatch_is_not_a_hash_match(self):
         self.make_xapk({"config.arm64_v8a.apk": archive([
             ("files/font/number.png", b"bad"),
