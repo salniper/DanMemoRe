@@ -13,7 +13,9 @@ import hashlib
 import json
 from pathlib import Path
 import re
+import stat
 import struct
+import zipfile
 
 from inspect_legacy_mismatches import png_crc_valid
 
@@ -32,6 +34,8 @@ ATLAS = "3/files/ui_atlas/home_gacha/gacha_top_move_parts_text.json"
 REMAINING = STORIES + MASTERS + (PNG, ATLAS)
 MAX_FILE_BYTES = 32 * 1024 * 1024
 MAX_PAYLOAD_BYTES = 48 * 1024 * 1024
+MAX_ZIP_ENTRIES = 400_000
+MAX_SELECTED_ZIP_BYTES = MAX_PAYLOAD_BYTES
 HASH = re.compile(r"^[0-9a-f]{32}$")
 
 
@@ -117,6 +121,50 @@ def directory_candidates(root: Path) -> dict:
     return result
 
 
+def zip_candidates(archive: Path) -> dict:
+    """Read only the exact 12 named targets from a local ZIP, never extract.
+
+    A preserved contents archive may store files at archive root or under a
+    single 'contents/' prefix.  Neither basenames nor fuzzy path matches count.
+    This is candidate comparison, not independent provenance or import approval.
+    """
+    if archive.is_symlink() or not archive.is_file():
+        raise ValueError("candidate ZIP must be a regular non-symlink file")
+    output = {}
+    total_size = 0
+    with zipfile.ZipFile(archive, "r", allowZip64=True) as bundle:
+        infos = bundle.infolist()
+        if len(infos) > MAX_ZIP_ENTRIES:
+            raise ValueError("candidate ZIP has too many entries")
+        for info in infos:
+            stored = info.filename
+            logical = stored[len("contents/"):] if stored.startswith("contents/") else stored
+            if logical not in REMAINING:
+                continue
+            if stored not in (logical, "contents/" + logical):
+                continue
+            if logical in output:
+                raise ValueError(f"duplicate target ZIP member: {logical}")
+            mode = info.external_attr >> 16
+            if (info.is_dir() or info.flag_bits & 1 or
+                    stat.S_ISLNK(mode) or
+                    stat.S_IFMT(mode) not in (0, stat.S_IFREG)):
+                raise ValueError(f"unsafe ZIP member: {logical}")
+            if not 0 < info.file_size <= MAX_FILE_BYTES:
+                raise ValueError(f"oversized or empty ZIP target: {logical}")
+            total_size += info.file_size
+            if total_size > MAX_SELECTED_ZIP_BYTES:
+                raise ValueError("candidate ZIP targets exceed total read bound")
+            # ZipFile.open verifies CRC; cap decompressed reads independently
+            # of compressed size so large unrelated archive entries are ignored.
+            with bundle.open(info, "r") as stream:
+                data = stream.read(MAX_FILE_BYTES + 1)
+            if len(data) != info.file_size:
+                raise ValueError(f"ZIP target length mismatch: {logical}")
+            output[logical] = data
+    return output
+
+
 def format_probe(name: str, data: bytes) -> str:
     if name.endswith(".enc"):
         return "BLOCK_ALIGNED_ONLY" if data and len(data) % 16 == 0 else "NOT_16_BYTE_ALIGNED"
@@ -194,9 +242,15 @@ def main():
     source = parser.add_mutually_exclusive_group(required=True)
     source.add_argument("--payload", type=Path, help="locally saved 19-file JSON payload; read-only")
     source.add_argument("--candidates", type=Path, help="independent candidate contents root; read-only")
+    source.add_argument("--candidate-zip", type=Path, help="local archive of candidate contents; exact paths only, no extraction")
     args = parser.parse_args()
     audit = json.loads(args.audit.read_text(encoding="utf-8"))
-    candidates = payload_candidates(args.payload) if args.payload else directory_candidates(args.candidates)
+    if args.payload:
+        candidates = payload_candidates(args.payload)
+    elif args.candidates:
+        candidates = directory_candidates(args.candidates)
+    else:
+        candidates = zip_candidates(args.candidate_zip)
     print(json.dumps(compare(audit, candidates), ensure_ascii=False, indent=2))
 
 
