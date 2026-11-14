@@ -262,3 +262,29 @@ python3 tools/assemble_reference_exact_recovery.py \
 **本輪真實使用者輸入的結果：** 對 Library 內 `danmemore_19_payload.json` 重新解碼逐項對照實際稽核，並將其中 12 個異常原始位元組放進**臨時、未對外發佈**的候選 ZIP；再次查得 **reference-exact 命中 0/12**。已驗證的 40 檔 v2 package 在本輪重新逐項通過；現有輸入沒有新增的 1,544 項 PNG 位元組，所以 reference-exact 新增為 **0/1,544**。沒有產生新的完整遊戲 ZIP，沒有修改使用者原始資料、既有 v2 套件或 AYN Thor。
 
 在本輪獨立隔離工作環境中執行純合成驗證：1,596 檔全命中時新資料夾可建立且逐檔內容正確、沒有候選時不得 staging、ZIP 內穿越路徑拒絕、40 檔 overlay 一旦遭更動即拒絕；四類案例成功。**這不等於 GitHub CI 或原版實機驗收已執行**。目前 12 個加密／視覺來源、1,544 張原圖與 25 個未映射劇情 opcode 仍未完成，原版完整戰鬥、抽卡、持續存檔亦未完成最終驗收，PR 維持 Draft。
+
+
+## 2026-11-14｜原始來源驗證器的二次校核與直接目錄讀取
+
+已唯讀審核前一輪提交的 `assemble_reference_exact_recovery.py`。此前 GitHub PR 的 4 個工作流程全綠，**但是新增整合器與其測試未納入這些 CI 工作**；不可把綠燈解釋為整合器已通過測試或遊戲已修復。
+
+發現並修正兩項安全／來源處理缺口：
+
+1. **基礎 40 檔的 TOCTOU 風險**：舊邏輯只在 `discover()` 驗證 40 檔，`stage_all()` 複製前若來源 ZIP 被替換或修改，可能把不符合 reference MD5 的位元組寫入新的資料夾。現在在 staging 開始前重新完整驗證 ZIP，且在寫入**每一檔**時重新檢查 size、MD5、ZIP 成員安全性與唯一性。若有變動即拒絕，失敗暫存目錄清理。
+2. **不必把原始 14 GB 重新壓縮**：新增 `--candidate-dir`（可重複），支援直接從持有者現有的解壓資料夾或其 `contents/` 子資料夾按 **完整原始路徑**讀取 12 個異常檔與 1,544 張背景。只讀取稽核清單列出的相對路徑，不遍歷所有遊戲檔；拒絕可見的目錄與檔案符號連結、過大的候選與偏離 MD5 的位元組。從目錄讀取的候選於 staging 時會再次以 reference size／MD5 核驗。跨名稱搜尋仍限候選 ZIP。
+3. **固定原本的兩個來源錨點**：命令列入口要求使用者 2026-11-10 的原始稽核 JSON SHA-256 `fd929c2ace550fe2b7a59dcff7294be756b29adcf81f92aadd89849b3c5c6f4c` 與此前已交付、驗證的 40 檔 v2 ZIP SHA-256 `df39400c3f664546332cb77087373249399a675b878eb460715c8a0f62b40780`；避免用任意改寫的稽核檔自行偽造「參考」雜湊。若使用者另有等價、但重新打包的 ZIP，須先另外驗證，不直接放寬 pin。
+
+從本機已存在的原始解壓內容**只讀**檢查（不會安裝／修改掌機或原始 RAR）：
+
+```sh
+python3 tools/assemble_reference_exact_recovery.py \
+  --audit '/path/to/danmemore_legacy_audit 3(1).json' \
+  --verified40 '/path/to/DanMemoRe_Original_40_ByteExact_Overlay_v2.zip' \
+  --candidate-dir '/path/to/extracted/contents'
+```
+
+可與 `--candidate-zip` 混用，但來源不齊時仍是 `INCOMPLETE_REFERENCE_SOURCES_NOT_IMPORTABLE`，不會產出「完整版」。不指定 `--apply` 即純唯讀，不建立任何復原目錄；取得全部 1,556 個另外缺失的 reference-exact 候選後也仍不是遊戲實機驗收。
+
+補了四個**待執行**合成測試：40 檔在發現後被換包、對已解壓 14 GB 資料夾逐檔來源驗證、符號連結拒絕、原稽核來源錨點被更動後拒絕。依專案 `AGENTS.md` 的目前「封包尚未完成前不執行測試／Build／GitHub Actions」指示，**本輪沒有主動執行這些新增測試，也沒有執行原版遊戲或實機驗收**。提交僅為隔離 Draft PR 的修復程式碼與待執行驗證，不改 `main`、設備、原始快取或 40 檔已驗證套件。
+
+**真實剩餘阻塞不變：** 12 個 reference-MD5 不符的檔案仍待取得正確來源；1,544 張參考抽卡原圖尚未找到；原版劇情 25 個 opcode 仍無經證實的 native handler 對應，整體戰鬥、抽卡、存檔需另行驗收。公開 Reddit 保存者的「資料完整」回覆未附可驗證檔案，不能計算為已回收成果。
