@@ -324,3 +324,26 @@ python3 tools/assemble_reference_exact_recovery.py \
 - 故意讓刪除壞 active 或 previous→active rename 失敗 → 清楚回報、保留可恢復舊快取，不得錯誤宣稱匯入成功。
 
 **驗證界線：** 這是資源匯入的**交易回復程式修正**，不代表新 14 GB 快取已取得、完整 1,556 個未解決資源已恢復，或原版戰鬥／抽卡／存檔已可玩。依專案 `AGENTS.md`，封包工作未完成前只進行程式修改與撰寫待測規格，不主動跑測試、編譯、觸發 GitHub Actions、安裝或重啟 listener；PR 保持 Draft、main／原始 RAR／裝置均未改動。原始應用程式未覆寫，修正尚未過 Android 真機驗收。
+
+
+## 2026-11-14｜無需重匯入的開遊戲前斷點快取恢復
+
+本輪查到一個先前匯入交易回復尚未涵蓋的實際使用路徑：**如果 App／系統在 `active → .previous` 之後、`staging → active` 之前中斷，使用者下一次直接按「Launch」時**，[原本的 MainActivity](../android/danmemore-launcher/app/src/main/kotlin/dev/danmemore/launcher/MainActivity.kt) 僅呼叫 `DanMemoContentCache.activeRoot()`，找不到 `active` 就要求重新匯入完整 ZIP；而上一輪 `recoverInterruptedActivation()` 只在再次執行匯入時才會觸發。這可能讓仍保存在 `.previous` 的完整舊內容暫時無法進入遊戲。
+
+已修改 [`ContentImportService.kt`](../android/danmemore-launcher/app/src/main/kotlin/dev/danmemore/launcher/ContentImportService.kt) 與 MainActivity：
+
+- 將既有 marker/schema/根目錄/八階段 manifest 的 `activeRoot` 確認條件抽出成共用 `validRoot(File)`，以同一標準審核 `.previous`。只有其**最小可用性條件**符合，才允許把它還原成 `active`；不把檔案存在當成完整遊戲驗證。
+- `restorePreviousForLaunch(context)` 在有有效 active 時直接成功、不改資料；若 active 無效，僅在 previous 通過上述檢查後才移除無效 active 並 `renameTo(active)`。若移除／更名失敗就保留可回復的 `.previous` 並報錯，不能假稱成功。
+- 在原來的匯入交易前回復和 `active/previous/staging` rename／驗證／清理段落使用相同 `synchronized(DanMemoContentCache)`，避免 MainActivity 回復程序在匯入切換的中途搶先動到暫存資料夾。**只保護目前同一 Android App process 內的並行**，不等於跨程序檔案鎖或斷電持久交易。
+- Launcher 的 `launch` 對缺失 active 時先進行一次背景 `worker.execute` 恢復，並透過 `handler.post` 更新 UI；恢復成功後才重新進入既有啟動流程。避免在 Android UI 執行緒遞迴刪除可能非常龐大的壞快取資料夾。
+
+**未來整合驗收（先寫規格，全部封包完成前不執行）：**
+
+1. 舊 active 已完整，previous 不存在／存在：直接啟動，不修改任何快取。
+2. 舊 active 已成功移入 previous、active 消失：按 Launch 時恢復 previous 並能進入原有啟動流程。
+3. active 為半寫入壞資料，previous 符合 marker/根目錄條件：移除壞資料後才恢復 previous。
+4. previous 本身缺少 manifest、marker 格式錯誤或版本不支援：不刪除它、不強行啟動、提示重新匯入。
+5. Launch 與正在進行的匯入切換同時發生：不得移除剛準備啟用或已經啟用的快取；匯入失敗仍以 previously-active 備份回復。
+6. 多次點擊 launch、復原時 App 被終止／重啟、空間不足、刪除或更名失敗：不重複派送啟動、不破壞目前的舊快取。
+
+**限制：** 上述檢查仍只是舊有 launcher marker/root 結構核對，**沒有重新對整份 14 GB 資源逐檔執行 MD5**，也**沒有實機遊戲測試**。依 `AGENTS.md` 不觸發 GitHub Actions、測試、Build、APK 安裝或 listener 重啟，故本輪修正狀態為 **SOURCE-ONLY / UNTESTED**。原版 12 個 MD5 不符檔案、1,544 張缺失抽卡原圖、未映射的劇情指令和完整戰鬥／抽卡／存檔驗收均維持未完成。原始備份、原有快取和 `main` 未動，PR #1 維持 Draft。
