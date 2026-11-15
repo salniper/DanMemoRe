@@ -388,3 +388,15 @@ python3 tools/assemble_reference_exact_recovery.py \
 因此仍須兩條**分開**的來源研究：其一，真正獨立的 12 個版本不符原始遊戲檔；其二，歷史原廠抽卡圖片的區域／版本／manifest 與來源證明，**不可用本地生成 fallback 的 MD5 當作原廠原圖的目標雜湊**。
 
 本輪在 Draft PR 補了兩個合成回歸案例，**只撰寫未執行**。依 AGENTS.md 不執行測試、Build、GitHub Actions 或實機驗收。本次沒有新增原版素材、12 個不符檔案仍未解決，任何可玩性結論不變。
+
+## 2026-11-15｜真正隔離 52 檔核心模式的來源掃描（SOURCE-ONLY）
+
+修正上一輪新增的 `--core-only` 只有「輸出不含背景」但掃描仍走全部 1,544 張背景的問題。即使只想追查 12 個原版 MD5 不符檔案，舊流程仍會對 ZIP／目錄背景逐項進行雜湊搜尋；若目錄包含不相關／不安全的背景檔案，可能阻擋核心盤點，且會把根本未想驗證的替代圖誤列為「缺失」。
+
+現在：
+- `discover(..., include_backgrounds=False)` 在直接目錄來源僅讀取 12 個原版核心異常項目；ZIP 不再將已知 `3/files/lottery/background/<ID>.png` 列為核心來源搜尋對象。
+- 核心模式不再把**未掃描**的 1,544 項背景當成「已確定缺失」：回報 `bundle_fallback_backgrounds_scanned=false`，背景的命中數、缺失數與缺失路徑為 `null`。
+- 只有 12/12 皆符合原始 reference 指紋時，核心掃描狀態才會是 `REFERENCE_EXACT_CORE_52_READY_STAGING_ONLY`；否則仍然拒絕套用。一般非核心模式維持 1,596 項 bundle-reference 掃描與條件。
+- 補充兩個僅撰寫的合成案例：核心模式跳過不相關背景的 symlink，以及 ZIP 中背景資料不干擾核心 12 檔的比對。
+
+此修正**不變更**原始 reference MD5、不改寫備份、沒有新找到的原版素材、不自動安裝 AYN Thor；原版劇情／戰鬥／抽卡的實際驗收仍未達成。依 `AGENTS.md` 目前只做原始碼與待執行測試案例，沒有執行任何測試、build 或 GitHub Actions。PR #1 保持 Draft。
