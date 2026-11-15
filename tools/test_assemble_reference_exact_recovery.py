@@ -119,6 +119,58 @@ class ExactRestorationTests(unittest.TestCase):
             self.assertFalse(status['original_game_playable'])
             self.assertFalse(status['publisher_original_gacha_art_authenticated'])
 
+    def test_core_only_discovery_skips_generated_background_files(self):
+        # Only the twelve original-content mismatches belong to the core scan.
+        # An unrelated fallback-background symlink must not be read or
+        # misclassified as twelve-source recovery failure.
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            audit,overlay,_,_,missing=fixture(root)
+            contents=root/'contents'
+            for name,raw in missing.items():
+                if '/lottery/background/' in name:
+                    continue
+                path=contents/name
+                path.parent.mkdir(parents=True,exist_ok=True)
+                path.write_bytes(raw)
+            unrelated=contents/'3/files/lottery/background'
+            unrelated.parent.mkdir(parents=True,exist_ok=True)
+            unrelated.symlink_to(root, target_is_directory=True)
+            groups,hits,report=recover.discover(
+                audit,overlay,[],[contents],include_backgrounds=False)
+            self.assertTrue(report['reference_exact_core_52_ready'])
+            self.assertEqual(report['status'],
+                             'REFERENCE_EXACT_CORE_52_READY_STAGING_ONLY')
+            self.assertFalse(report['bundle_fallback_backgrounds_scanned'])
+            self.assertIsNone(report['found_reference_exact_backgrounds'])
+            self.assertIsNone(report['missing_reference_exact_background_count'])
+            self.assertIsNone(report['missing_reference_exact_background_paths'])
+            output=root/'core-only'
+            recover.stage_all(overlay,groups,hits,output,include_backgrounds=False)
+            self.assertEqual(len([p for p in output.rglob('*') if p.is_file()]),53)
+            with self.assertRaisesRegex(ValueError,'symlink'):
+                recover.discover(audit,overlay,[],[contents])
+
+    def test_core_only_zip_ignores_unrelated_generated_background(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            audit,overlay,_,_,missing=fixture(root)
+            archive=root/'core-candidates.zip'
+            with zipfile.ZipFile(archive,'w') as z:
+                for name,raw in missing.items():
+                    if '/lottery/background/' not in name:
+                        z.writestr('renamed/'+name.replace('/','-'),raw)
+                # A generated background is not part of core recovery, even
+                # when the archive happens to carry one at the reference path.
+                z.writestr('contents/3/files/lottery/background/171000001.png',
+                           b'not-the-reference')
+            _,_,report=recover.discover(audit,overlay,[archive],
+                                         include_backgrounds=False)
+            self.assertTrue(report['reference_exact_core_52_ready'])
+            self.assertEqual(report['found_reference_exact_remaining'],12)
+            self.assertFalse(report['bundle_fallback_backgrounds_scanned'])
+            self.assertIsNone(report['found_reference_exact_backgrounds'])
+
     def test_core_52_refuses_missing_original_content_blockers(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp)
