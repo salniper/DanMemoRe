@@ -957,3 +957,13 @@ All seven packaged modules matched current source. Original Adventure5/date
 2022-08-20 selection was restored with game/listener stopped, without opening
 its database. Other banners/pools/odds/art, paid/ticket/selector/scratch paths,
 event resets, interruptions and full gacha stability remain unverified.
+
+## 2026-11-15｜缺失抽卡按鈕與超界批次費用的來源碼防護（SOURCE ONLY / UNTESTED）
+
+針對 `lottery/draw`、`lottery/ticket/draw` 的新請求路徑，修正原本直接讀取 `lottery.buttons[buttonType-1].consumeType` 的缺口：某個已存檔舊卡池有缺少的按鈕資料、或 buttons 不是陣列時，會在扣付 Iris／票券、產生抽卡 operation 前以 **503／原生取消回復路徑** 明確拒絕，而不是由 `TypeError` 落入一般伺服器錯誤。第四鈕仍沿用原來映射第二鈕的既有規則，未擴大支持範圍。
+
+同一來源碼路徑在計算 `button.consumeAmount * drawCount` 後增加非負安全整數檢查，避免可能失去精度的批次費用進入票券序列／貨幣扣付。正確完整的原始卡池及原本的持續抽卡操作不變；既有待 ACK 原封包仍依持久化的 receipt 與 request hash 重放，未替歷史缺失卡池偽造新卡池或強行解鎖。
+
+在 `tools/test_lottery.cjs` 的已知原始卡池請求之前新增 **寫入但未執行** 的合成缺失單一按鈕與缺失按鈕清單案例，要求回覆 503 且儲存檔、Iris、操作佇列、request/ACK 證據不變，恢復原始測試用 catalog 後再走既有普通抽卡情境。
+
+這只是對**已存在抽卡封包實作**的安全拒絕分支補齊，**不是新增一個已完成的封包或增加可玩驗證數**。仍有原版資源 12 項 MD5 缺口、原始劇情 opcode 處理、各功能封包變體和 AYN Thor 實機驗收待完成。依 `AGENTS.md` 沒有執行任何測試、CI、建置或裝置操作。
