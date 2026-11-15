@@ -28637,7 +28637,13 @@ function createServer({ database, seed, databaseFactory, master = null, gachaArt
     requireValue(lottery, 'Unknown original lottery');
     requireValue(lottery.startAt <= now && (!lottery.endAt || now < lottery.endAt), 'Lottery is outside its original availability window');
     const buttonType = value.buttonIndex === 4 ? 2 : value.buttonIndex;
+    // A preserved banner can omit a button variant. Treat that as an
+    // unavailable original contract, not a TypeError/500 or a free draw.
+    if (!Array.isArray(lottery.buttons))
+      fail(503, 'Original lottery button catalog is unavailable');
     let button = lottery.buttons[buttonType - 1];
+    if (!button || typeof button !== 'object' || Array.isArray(button))
+      fail(503, 'Selected original lottery button is unavailable');
     const selectionGroupIds = lottery.selectionGroupIds ?? [];
     const selectedPcIds = selectionGroupIds.map((groupId, i) => value[optional[i]]);
     if (selectionGroupIds.length) requireValue(selectionGroupIds.length <= optional.length &&
@@ -28700,6 +28706,10 @@ function createServer({ database, seed, databaseFactory, master = null, gachaArt
       lastPickedAt:progress.lastPickedAt,drawCount });
     if (scratchClaim) extras.UserScratch = scratchClaim.after.state;
     const cost = button.consumeAmount * drawCount;
+    // Native ticket/currency costs are integer values. A large authored
+    // batch must fail closed before any wallet or ticket operation is made.
+    if (!Number.isSafeInteger(cost) || cost < 0)
+      fail(503, 'Original lottery batch cost is outside the supported integer range');
     let ticketSpend=null;
     if (usesTicket) {
       const ticketRows = store.read('UserGachaTicket').data,
