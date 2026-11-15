@@ -155,10 +155,14 @@ def read_direct_candidate(root, relative):
     return raw
 
 
-def discover(audit, overlay, archives, directories=()):
+def discover(audit, overlay, archives, directories=(), *, include_backgrounds=True):
     groups=checks(audit)
     base_count=verify_base40(overlay,groups)
-    target={**groups['remaining'],**groups['backgrounds']}
+    # Core-only discovery must not read generated banner fallback candidates.
+    # These background hashes are not authenticated publisher artwork.
+    target={**groups['remaining']}
+    if include_backgrounds:
+        target.update(groups['backgrounds'])
     by_size={}
     for path,attrs in groups['remaining'].items():
         by_size.setdefault(attrs[0],[]).append((path,attrs[1]))
@@ -176,7 +180,9 @@ def discover(audit, overlay, archives, directories=()):
                 name=info.filename
                 # Backgrounds require exactly the expected original path.
                 rel=name[len('contents/'):] if name.startswith('contents/') else name
-                is_background=rel in groups['backgrounds']
+                if not include_backgrounds and rel in groups['backgrounds']:
+                    continue
+                is_background=include_backgrounds and rel in groups['backgrounds']
                 possible=by_size.get(info.file_size,[])
                 if not is_background and not possible:
                     continue
@@ -216,22 +222,31 @@ def discover(audit, overlay, archives, directories=()):
                 inspected+=1
                 if hashlib.md5(raw).hexdigest()==expected_md5 and len(hits[name])<4:
                     hits[name].append((str(base),None))
-    missing={key:sorted(path for path in group if not hits[path])
-             for key,group in [('remaining',groups['remaining']),('backgrounds',groups['backgrounds'])]}
-    core_ready = not missing['remaining']
+    missing_remaining=sorted(path for path in groups['remaining'] if not hits[path])
+    missing_backgrounds=(sorted(path for path in groups['backgrounds'] if not hits[path])
+                         if include_backgrounds else None)
+    core_ready = not missing_remaining
+    full_bundle_ready=(core_ready and include_backgrounds and not missing_backgrounds)
+    status=('REFERENCE_EXACT_SOURCE_READY_STAGING_ONLY' if full_bundle_ready
+            else 'REFERENCE_EXACT_CORE_52_READY_STAGING_ONLY'
+            if core_ready and not include_backgrounds
+            else 'INCOMPLETE_REFERENCE_SOURCES_NOT_IMPORTABLE')
     # The manifest's 1,544 replacement-card fingerprints are locally generated,
     # not independently authenticated publisher artwork. Keep this distinction
     # explicit instead of calling those reference MD5s "original gacha art".
     result={
-        'status':'REFERENCE_EXACT_SOURCE_READY_STAGING_ONLY' if not any(missing.values()) else 'INCOMPLETE_REFERENCE_SOURCES_NOT_IMPORTABLE',
+        'status':status,
         'verified_base_overlay_files':base_count,
+        'bundle_fallback_backgrounds_scanned':include_backgrounds,
         'reference_exact_core_52_ready':core_ready,
         'bundle_fallback_backgrounds_are_original_art':False,
-        'found_reference_exact_remaining':12-len(missing['remaining']),
-        'found_reference_exact_backgrounds':1544-len(missing['backgrounds']),
-        'missing_reference_exact_remaining':missing['remaining'],
-        'missing_reference_exact_background_count':len(missing['backgrounds']),
-        'missing_reference_exact_background_paths':missing['backgrounds'],
+        'found_reference_exact_remaining':12-len(missing_remaining),
+        'found_reference_exact_backgrounds':(1544-len(missing_backgrounds)
+                                             if include_backgrounds else None),
+        'missing_reference_exact_remaining':missing_remaining,
+        'missing_reference_exact_background_count':(len(missing_backgrounds)
+                                                    if include_backgrounds else None),
+        'missing_reference_exact_background_paths':missing_backgrounds,
         'candidate_entries_hashed':inspected,
         'candidate_bytes_hashed':total_bytes,
         'independent_source_provenance_verified':False,
@@ -334,7 +349,8 @@ def main():
         parser.error('--apply requires --output-dir')
     audit=load_pinned_owner_inputs(args.audit,args.verified40)
     groups,hits,report=discover(audit,args.verified40,
-                                args.candidate_zip,args.candidate_dir)
+                                args.candidate_zip,args.candidate_dir,
+                                include_backgrounds=not args.core_only)
     if args.apply:
         if args.core_only:
             if not report['reference_exact_core_52_ready']:
