@@ -69,6 +69,10 @@ async function main() {
       put('UserPC',progressed);
       put('UserPC',progressed.map(row=>row.pcId===pcId?{...row,userId:9}:row));
       await reject(send('user/login'));
+      put('UserPC',progressed.map(row=>row.pcId===pcId?{...row,ownerType:3}:row));
+      // A borrowed/guest PC must not satisfy a signed acquired-unit
+      // operation, even if its id, owner and joined state look correct.
+      await reject(send('user/login'));
       put('UserPC',progressed);
       const original=app.store.operations(),derived=projection(operation),profiles=snapshot();
       assert.deepEqual(derived.parameters.UserPC,[]);assert.equal(snapshot(),profiles);
@@ -93,6 +97,14 @@ async function main() {
       assert.deepEqual((await request(port,identity,ack,String(identity),'user_data/push')).body,response.body);
       assert.equal(snapshot(),retained);
       assert.throws(()=>app.store.lotteryRecovery(operation),error=>error.status===503 && error.offlineUnavailable);
+      // After true ACK, an existing borrowed PC cannot become a preowned
+      // duplicate-bond source. Only native permanent ownerType=1 qualifies.
+      const ownedPcs=app.store.read('UserPC').data;
+      put('UserPC',ownedPcs.map(row=>row.pcId===pcId?{...row,ownerType:3}:row));
+      const foreignOwnership=snapshot();
+      assert.throws(()=>app.store.issueDraw([pcId],{},1000),/Invalid saved present character or ability boards/);
+      assert.equal(snapshot(),foreignOwnership,'Guest ownership must not create an operation or bond grant');
+      put('UserPC',ownedPcs);
     }
 
     // One completed variant and one untouched variant can share the same state1-to2 character.
