@@ -57,6 +57,34 @@ async function main() {
       progressCount: 0, currentStepIndex: 0, isScratch: false, clientChargeHardCurrency: 0,
       clientFreeHardCurrency: 100, clientTotalHardCurrency: 100 };
     app.store.changeHardCurrency(100);
+    // WRITTEN ONLY / DO NOT RUN until all packet variants are implemented:
+    // A preserved banner with a missing native button variant must cancel,
+    // rather than throw 500 or charge Iris before failing. Restore the exact
+    // shared catalog object before the ordinary source-derived draw proceeds.
+    const buttonCatalog=master.lotteries[body.lotteryId].buttons;
+    const preflightState=saved();
+    try {
+      master.lotteries[body.lotteryId].buttons=[...buttonCatalog];
+      master.lotteries[body.lotteryId].buttons[body.buttonIndex-1]=undefined;
+      const unsupported=await send(body);
+      assert.equal(unsupported.status,503,unsupported.body.toString());
+      assert.deepEqual(saved(),preflightState,'Missing lottery button must not debit, issue or change a save');
+      master.lotteries[body.lotteryId].buttons=null;
+      const missingCatalog=await send(body);
+      assert.equal(missingCatalog.status,503,missingCatalog.body.toString());
+      assert.deepEqual(saved(),preflightState,'Missing button catalog must not debit, issue or change a save');
+      // The persisted payment receipt accepts at most 999,999,999 Iris.
+      // Reject a mismatched authored batch price before charging currency,
+      // even though 1,000,000,000 is still a JavaScript safe integer.
+      master.lotteries[body.lotteryId].buttons=[...buttonCatalog];
+      master.lotteries[body.lotteryId].buttons[body.buttonIndex-1]={
+        ...buttonCatalog[body.buttonIndex-1],consumeAmount:1000000000};
+      const excessive=await send({...body,consumeAmount:1000000000});
+      assert.equal(excessive.status,503,excessive.body.toString());
+      assert.deepEqual(saved(),preflightState,'Out-of-range payment cannot debit or issue a lottery operation');
+    } finally {
+      master.lotteries[body.lotteryId].buttons=buttonCatalog;
+    }
     const first = await send(body);
     assert.equal(first.status, 200, first.body.toString());
     const result = JSON.parse(first.body), state = saved();

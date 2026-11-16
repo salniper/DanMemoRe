@@ -6,6 +6,8 @@ plugins {
 
 val repositoryRoot = rootProject.file("../..").canonicalFile
 val gamePackageId = providers.gradleProperty("danmemoreGamePackage").getOrElse("com.eu.danmore")
+val launcherPackageId = providers.gradleProperty("danmemoreLauncherApplicationId").getOrElse("dev.danmemore.launcher")
+require(launcherPackageId.matches(Regex("[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+"))) { "Invalid DanMemoRe launcher application ID" }
 require(gamePackageId.matches(Regex("[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+"))) { "Invalid DanMemoRe game package" }
 val strictContentManifest = providers.gradleProperty("danmemoreStrictContentManifest").getOrElse("true").toBooleanStrict()
 val libnodeRoot = providers.environmentVariable("DANMEMORE_LIBNODE_DIR")
@@ -40,7 +42,7 @@ android {
     compileSdk = 36
     ndkVersion = "27.2.12479018"
     defaultConfig {
-        applicationId = "dev.danmemore.launcher"
+        applicationId = launcherPackageId
         minSdk = 26
         targetSdk = 36
         versionCode = 1

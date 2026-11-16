@@ -957,3 +957,36 @@ All seven packaged modules matched current source. Original Adventure5/date
 2022-08-20 selection was restored with game/listener stopped, without opening
 its database. Other banners/pools/odds/art, paid/ticket/selector/scratch paths,
 event resets, interruptions and full gacha stability remain unverified.
+
+## 2026-11-15｜缺失抽卡按鈕與超界批次費用的來源碼防護（SOURCE ONLY / UNTESTED）
+
+針對 `lottery/draw`、`lottery/ticket/draw` 的新請求路徑，修正原本直接讀取 `lottery.buttons[buttonType-1].consumeType` 的缺口：某個已存檔舊卡池有缺少的按鈕資料、或 buttons 不是陣列時，會在扣付 Iris／票券、產生抽卡 operation 前以 **503／原生取消回復路徑** 明確拒絕，而不是由 `TypeError` 落入一般伺服器錯誤。第四鈕仍沿用原來映射第二鈕的既有規則，未擴大支持範圍。
+
+同一來源碼路徑在計算 `button.consumeAmount * drawCount` 後增加非負安全整數檢查，避免可能失去精度的批次費用進入票券序列／貨幣扣付。正確完整的原始卡池及原本的持續抽卡操作不變；既有待 ACK 原封包仍依持久化的 receipt 與 request hash 重放，未替歷史缺失卡池偽造新卡池或強行解鎖。
+
+在 `tools/test_lottery.cjs` 的已知原始卡池請求之前新增 **寫入但未執行** 的合成缺失單一按鈕與缺失按鈕清單案例，要求回覆 503 且儲存檔、Iris、操作佇列、request/ACK 證據不變，恢復原始測試用 catalog 後再走既有普通抽卡情境。
+
+這只是對**已存在抽卡封包實作**的安全拒絕分支補齊，**不是新增一個已完成的封包或增加可玩驗證數**。仍有原版資源 12 項 MD5 缺口、原始劇情 opcode 處理、各功能封包變體和 AYN Thor 實機驗收待完成。依 `AGENTS.md` 沒有執行任何測試、CI、建置或裝置操作。
+
+## 2026-11-17｜持有 PC 與借用 Guest 的取得／存檔驗證分離（SOURCE ONLY / UNTESTED）
+
+原版 `newUserPc(pcId)` 產生的獲得角色資料屬於 `ownerType=1`、尚待 native 初始化的 `joiningState=0`；其他單人遊戲路徑如 Expedition/Party 也要求 **持有且已加入的 PC 為 `userId=USER_ID`、`ownerType=1`、`joiningState=1`**。Stage guest 可以使用另一種 `ownerType=3` 與嵌入式借用裝備，但不能混入持有角色名單。
+
+此前共用 `giftPcTarget()` 僅檢查持有玩家 ID／`joiningState=1`／工作板所有權，`savedGiftPcUnit()` 僅檢查玩家 ID／已加入及升級數值；兩者未一律強制檢查 `ownerType=1`，因此外來存檔若在同一 PC ID 下保留 `ownerType=3`，可能被當成已持有的抽卡複製品來源，或被認為新單位的實際 native 存檔已完成。
+
+本輪在**兩個共用驗證點**加上 `pc.ownerType === 1`；這同時保護使用該驗證器的抽卡（正常 1000／教學 1001）、Present 及相關原版角色獎勵來源。既有 `gift_pc_floor`、已保留操作、原本的加密 operation、收據、貨幣、劇情與衣裝狀態均不改寫。錯誤持有類型採既有 fail-closed 拒絕，**不**把 `ownerType=3` 改成 `1`，也**不**建立替代角色或新增債務補發。
+
+`test_gacha_unit_recovery.cjs` 新增僅撰寫的兩類案例：
+- 操作已排入、完整原生角色資料上傳後，將已取得 PC 的 ownerType 改為3；後續登入／原 operation 發送必須拒絕，而不能提前確認；
+- 原操作已真實 ACK 後，將已擁有角色的 ownerType 改為3；下一次抽到相同 ID 時，不能算作重複持有角色並新增突破素材操作。
+
+此防護是**來源碼變更，尚未執行測試與 native 實機驗收**；無法宣稱抽卡與戰鬥完整可玩。依 `AGENTS.md` 目前仍處封包實作階段，沒有執行測試、Build、Actions 或在 AYN Thor 安裝 APK。原版復原包 v2 未要求使用者下載。
+
+## 2026-11-17｜抽卡付款上限與持久收據一致（SOURCE ONLY / UNTESTED）
+
+`lotteryPaymentReceipt` 對一般／票券抽卡的原始費用 `consumeAmount × drawCount` 既有 `0..999999999` 邊界；新請求的 `drawLottery` 先前僅要求非負 JavaScript safe integer。這個差異會讓極端／損壞的來源卡池在建立付款與抽卡 operation 時通過初步檢查，之後在重放／確認路徑被既有持久收據判為不可回復。
+
+本輪同步新請求前置驗證至 `0..999999999`，於 Iris／票券支出與 `issueDraw` 前拒絕不一致資料。沒有更改任何原廠費率、歷史扣款、抽獎池或已存在 operation 的恢復政策。
+
+`test_lottery.cjs` 擴充 **僅撰寫未執行** 的合成案例：同一來源卡池按鈕的費用暫設為 `1000000000`、提交相同表單時必須回 503，且持有 Iris、操作、收據、角色與存檔快照不變；之後恢復原始測試卡池。這不代表真實玩家會遇到該超界資料，也不是已驗證的遊戲修復成功。依 AGENTS.md 無測試、Build、CI、APK 或 AYN Thor 操作。
+
