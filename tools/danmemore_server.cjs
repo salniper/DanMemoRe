@@ -28710,8 +28710,8 @@ function createServer({ database, seed, databaseFactory, master = null, gachaArt
     const cost = button.consumeAmount * drawCount;
     // Native ticket/currency costs are integer values. A large authored
     // batch must fail closed before any wallet or ticket operation is made.
-    if (!Number.isSafeInteger(cost) || cost < 0)
-      fail(503, 'Original lottery batch cost is outside the supported integer range');
+    if (!Number.isSafeInteger(cost) || cost < 0 || cost > 999999999)
+      fail(503, 'Original lottery batch cost is outside the supported payment receipt range');
     let ticketSpend=null;
     if (usesTicket) {
       const ticketRows = store.read('UserGachaTicket').data,
