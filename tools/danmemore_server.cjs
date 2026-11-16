@@ -11332,7 +11332,8 @@ function openStore({ database, seed, master = null, databaseFactory = desktopDat
     const profile = master.pcProfiles[grant.pcId], units = pcRows.filter(row => row.pcId === grant.pcId), pc = units[0];
     const sets = jobRows.filter(row => row.pcId === grant.pcId), set = sets[0];
     requireValue(units.length <= 1 && sets.length <= 1 && (!pc || pc.userId === USER_ID && pc.joiningState === 1 &&
-      set?.userId === USER_ID && Array.isArray(set.pcJobs)) && (pc || !set), 'Invalid saved present character or ability boards');
+      pc.ownerType === 1 && set?.userId === USER_ID && Array.isArray(set.pcJobs)) && (pc || !set),
+      'Invalid saved present character or ability boards');
     const target = { limitbreakCount: pc?.limitbreakCount ?? 0, heroSublimateLevel: pc?.heroSublimateLevel ?? 0,
       isUnlockedHeroSublimate: pc?.isUnlockedHeroSublimate ?? false, currentJobIndex: pc?.currentJobIndex ?? 1,
       // Ordinary initialization creates the owned job set; its boards may be
@@ -11431,7 +11432,8 @@ function openStore({ database, seed, master = null, databaseFactory = desktopDat
   }
   const savedGiftPcUnit = (pcId, target, pcs) => {
     const units = pcs.filter(row => row.pcId === pcId), pc = units[0];
-    return validGiftPcTarget(pcId, target) && units.length === 1 && pc.userId === USER_ID && pc.joiningState === 1 &&
+    return validGiftPcTarget(pcId, target) && units.length === 1 && pc.userId === USER_ID &&
+      pc.joiningState === 1 && pc.ownerType === 1 &&
       ['limitbreakCount','heroSublimateLevel','currentJobIndex','totalExp'].every(key => Number.isSafeInteger(pc[key]) && pc[key] >= target[key]) &&
       pc.limitbreakCount <= 5 && pc.heroSublimateLevel <= 6 && pc.currentJobIndex <= master.pcProfiles[pcId].jobIds.length &&
       pc.totalExp <= 0x7fffffff && typeof pc.isUnlockedHeroSublimate === 'boolean' &&
