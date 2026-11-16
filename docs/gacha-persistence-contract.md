@@ -981,3 +981,12 @@ event resets, interruptions and full gacha stability remain unverified.
 - 原操作已真實 ACK 後，將已擁有角色的 ownerType 改為3；下一次抽到相同 ID 時，不能算作重複持有角色並新增突破素材操作。
 
 此防護是**來源碼變更，尚未執行測試與 native 實機驗收**；無法宣稱抽卡與戰鬥完整可玩。依 `AGENTS.md` 目前仍處封包實作階段，沒有執行測試、Build、Actions 或在 AYN Thor 安裝 APK。原版復原包 v2 未要求使用者下載。
+
+## 2026-11-17｜抽卡付款上限與持久收據一致（SOURCE ONLY / UNTESTED）
+
+`lotteryPaymentReceipt` 對一般／票券抽卡的原始費用 `consumeAmount × drawCount` 既有 `0..999999999` 邊界；新請求的 `drawLottery` 先前僅要求非負 JavaScript safe integer。這個差異會讓極端／損壞的來源卡池在建立付款與抽卡 operation 時通過初步檢查，之後在重放／確認路徑被既有持久收據判為不可回復。
+
+本輪同步新請求前置驗證至 `0..999999999`，於 Iris／票券支出與 `issueDraw` 前拒絕不一致資料。沒有更改任何原廠費率、歷史扣款、抽獎池或已存在 operation 的恢復政策。
+
+`test_lottery.cjs` 擴充 **僅撰寫未執行** 的合成案例：同一來源卡池按鈕的費用暫設為 `1000000000`、提交相同表單時必須回 503，且持有 Iris、操作、收據、角色與存檔快照不變；之後恢復原始測試卡池。這不代表真實玩家會遇到該超界資料，也不是已驗證的遊戲修復成功。依 AGENTS.md 無測試、Build、CI、APK 或 AYN Thor 操作。
+
