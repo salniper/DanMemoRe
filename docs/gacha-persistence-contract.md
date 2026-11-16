@@ -967,3 +967,17 @@ event resets, interruptions and full gacha stability remain unverified.
 在 `tools/test_lottery.cjs` 的已知原始卡池請求之前新增 **寫入但未執行** 的合成缺失單一按鈕與缺失按鈕清單案例，要求回覆 503 且儲存檔、Iris、操作佇列、request/ACK 證據不變，恢復原始測試用 catalog 後再走既有普通抽卡情境。
 
 這只是對**已存在抽卡封包實作**的安全拒絕分支補齊，**不是新增一個已完成的封包或增加可玩驗證數**。仍有原版資源 12 項 MD5 缺口、原始劇情 opcode 處理、各功能封包變體和 AYN Thor 實機驗收待完成。依 `AGENTS.md` 沒有執行任何測試、CI、建置或裝置操作。
+
+## 2026-11-17｜持有 PC 與借用 Guest 的取得／存檔驗證分離（SOURCE ONLY / UNTESTED）
+
+原版 `newUserPc(pcId)` 產生的獲得角色資料屬於 `ownerType=1`、尚待 native 初始化的 `joiningState=0`；其他單人遊戲路徑如 Expedition/Party 也要求 **持有且已加入的 PC 為 `userId=USER_ID`、`ownerType=1`、`joiningState=1`**。Stage guest 可以使用另一種 `ownerType=3` 與嵌入式借用裝備，但不能混入持有角色名單。
+
+此前共用 `giftPcTarget()` 僅檢查持有玩家 ID／`joiningState=1`／工作板所有權，`savedGiftPcUnit()` 僅檢查玩家 ID／已加入及升級數值；兩者未一律強制檢查 `ownerType=1`，因此外來存檔若在同一 PC ID 下保留 `ownerType=3`，可能被當成已持有的抽卡複製品來源，或被認為新單位的實際 native 存檔已完成。
+
+本輪在**兩個共用驗證點**加上 `pc.ownerType === 1`；這同時保護使用該驗證器的抽卡（正常 1000／教學 1001）、Present 及相關原版角色獎勵來源。既有 `gift_pc_floor`、已保留操作、原本的加密 operation、收據、貨幣、劇情與衣裝狀態均不改寫。錯誤持有類型採既有 fail-closed 拒絕，**不**把 `ownerType=3` 改成 `1`，也**不**建立替代角色或新增債務補發。
+
+`test_gacha_unit_recovery.cjs` 新增僅撰寫的兩類案例：
+- 操作已排入、完整原生角色資料上傳後，將已取得 PC 的 ownerType 改為3；後續登入／原 operation 發送必須拒絕，而不能提前確認；
+- 原操作已真實 ACK 後，將已擁有角色的 ownerType 改為3；下一次抽到相同 ID 時，不能算作重複持有角色並新增突破素材操作。
+
+此防護是**來源碼變更，尚未執行測試與 native 實機驗收**；無法宣稱抽卡與戰鬥完整可玩。依 `AGENTS.md` 目前仍處封包實作階段，沒有執行測試、Build、Actions 或在 AYN Thor 安裝 APK。原版復原包 v2 未要求使用者下載。
